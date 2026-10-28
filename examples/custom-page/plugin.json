@@ -1,0 +1,11 @@
+{
+  "name": "custompage",
+  "version": "0.0.1",
+  "description": "Example: draw a custom layout and attach native bank interaction with BindItem.",
+  "hasRibbonIcon": false,
+  "optionalDependencies": {
+    "bankcore": "bankcore"
+  },
+  "requiredPermissions": [],
+  "optionalPermissions": []
+}

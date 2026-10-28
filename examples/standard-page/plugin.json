@@ -1,0 +1,11 @@
+{
+  "name": "standardpage",
+  "version": "0.0.1",
+  "description": "Example: define an item page and open it from a sidebar icon.",
+  "hasRibbonIcon": false,
+  "optionalDependencies": {
+    "bankcore": "bankcore"
+  },
+  "requiredPermissions": [],
+  "optionalPermissions": []
+}

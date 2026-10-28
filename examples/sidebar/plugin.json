@@ -1,0 +1,11 @@
+{
+  "name": "sidebar",
+  "version": "0.0.1",
+  "description": "Example: draw a sidebar column and connect a button to a bank page.",
+  "hasRibbonIcon": false,
+  "optionalDependencies": {
+    "bankcore": "bankcore"
+  },
+  "requiredPermissions": [],
+  "optionalPermissions": []
+}

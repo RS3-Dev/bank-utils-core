@@ -1,0 +1,11 @@
+{
+  "name": "bankcore",
+  "version": "1.1.0",
+  "description": "Bank Utilities Core: shared bank layout, pages, sidebar tabs, and native item interactions.",
+  "hasRibbonIcon": false,
+  "dependencies": {
+    "prettyui": 6398181
+  },
+  "requiredPermissions": [],
+  "optionalPermissions": []
+}

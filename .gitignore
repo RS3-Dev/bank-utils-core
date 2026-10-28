@@ -1,0 +1,12 @@
+# Local development files and packages
+/tests/
+/tools/
+/.github/workflows/check.yml
+/dist/
+/*.zip
+*.luac
+luac.out
+
+# Files created by the operating system
+.DS_Store
+Thumbs.db
