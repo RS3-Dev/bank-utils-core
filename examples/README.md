@@ -48,4 +48,4 @@ The [API reference](../docs/API.md) covers the complete method and callback list
 Try your example in RuneScape before publishing it.
 
 Each example needs only `main.lua`, `plugin.json` and the project's
-[GPL-3.0-only license](../LICENSE).
+[BSD-2-Clause license](../LICENSE).

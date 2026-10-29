@@ -74,5 +74,5 @@ appearance in RuneScape when changing those parts.
 ## License
 
 Copyright (C) 2026 Bank Core contributors. Core and its examples are licensed
-under the [GNU General Public License, version 3 only](LICENSE)
-(`GPL-3.0-only`). Include the license when redistributing them.
+under the [BSD 2-Clause License](LICENSE)
+(`BSD-2-Clause`). Include the license when redistributing them.

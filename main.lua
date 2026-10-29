@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: GPL-3.0-only
+-- SPDX-License-Identifier: BSD-2-Clause
 -- Copyright (C) 2026 Bank Core contributors
 
 -- Start Bank Core's single bank session and publish its extension API

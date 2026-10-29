@@ -15,4 +15,4 @@ native bank items. Feature-specific behavior belongs in the feature plugin.
 - Explain what changed, why, how you checked it and any problems still known.
   Update the docs or examples when their behavior changes.
 
-Contributions use the project's [GPL-3.0-only license](LICENSE).
+Contributions use the project's [BSD-2-Clause license](LICENSE).
