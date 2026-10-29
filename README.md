@@ -19,7 +19,6 @@ plugins/
   bankcore/
     main.lua
     plugin.json
-    LICENSE
     lib/
 ```
 
