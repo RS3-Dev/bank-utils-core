@@ -24,7 +24,7 @@ local function drawPage(view)
         picture:SetSize(item.size, item.size)
         picture:SetAssociatedObject(item.objectID)
         picture.associatedObjectQuantityMode = ui.ObjectQuantityDisplayMode.NEVER
-        assert(view:BindItem(picture, item.objectID)) -- Native hover, menus and dragging.
+        assert(view:BindItem(picture, item.objectID)) -- The game's hover, menus and clicks.
     end
     return 200 -- Total content height; Core supplies scrolling if needed.
 end

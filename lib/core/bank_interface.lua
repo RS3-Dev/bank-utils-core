@@ -1,19 +1,19 @@
--- Find native bank interface components by their static slot
+-- Find parts of the game's bank window by their fixed IDs.
 
 local Config = require("lib/core/config")
 
 local BankInterface = {}
 
--- Static slots of the bank's item layer and the viewport that scrolls it
+-- IDs for the bank's item area and its scrolling container.
 BankInterface.ITEMS = 201
 BankInterface.ITEMS_CONTAINER = 199
 
--- Find a bank component, letting host errors reach the caller
+-- Find a bank control; pass any game errors to the caller.
 function BankInterface.Get(staticID)
     return ui.Interfaces:GetComponent(Config.BANK_INTERFACE_ID, staticID)
 end
 
--- Find a bank component that can be missing while the bank rebuilds
+-- Return nil if a bank control is missing or cannot be read during a rebuild.
 function BankInterface.Find(staticID)
     local ok, value = pcall(BankInterface.Get, staticID)
     return ok and value or nil

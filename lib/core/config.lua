@@ -1,21 +1,21 @@
--- Static host IDs, event prefix, storage keys, and sidebar dimensions
+-- Shared game IDs, saved-data keys, and sidebar sizes.
 
 local Config = {
-    -- Prefix for the bank core's event subscriptions and hook names
+    -- Shared prefix for Core's event and hook names.
     CORE_REF = "bankcore",
-    -- The bank core's own preferences: debug logging and the sidebar icon order
+    -- Where Core saves the debug setting and sidebar icon order.
     PREFERENCES_KEY = "bankcore:settings:v1",
-    -- The offsets the sidebar added to the bank window until taken off
+    -- Where Core saves window adjustments so they can be undone.
     WINDOW_KEY = "bankcore:window:v1",
     BANK_INTERFACE_ID = 517,
     BANK_INVENTORY_ID = 95,
-    -- The sidebar's content column and the space after it
+    -- Width of the sidebar content area, including space after it.
     SIDEBAR_COLUMN_WIDTH = 244,
-    -- The vertical tab rail and the gap between it and the content column
+    -- Width of the icon strip and its gap from the content area.
     SIDEBAR_TAB_WIDTH = 32,
     SIDEBAR_TAB_GAP = 8,
 }
--- How far the sidebar widens the bank: tab rail, gap, content column, and the space after it
+-- Total width added to the bank for the sidebar.
 Config.SIDEBAR_WIDTH = Config.SIDEBAR_TAB_WIDTH + Config.SIDEBAR_TAB_GAP + Config.SIDEBAR_COLUMN_WIDTH
 
 return Config

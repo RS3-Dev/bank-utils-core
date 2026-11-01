@@ -16,6 +16,7 @@ function BankControls.button(parent, content, action, options)
         active = options.active == true,
         disabled = options.disabled == true,
         spriteName = options.spriteName,
+        spriteID = options.spriteID,
     }, NativeButton)
     local x, y = options.x or 0, options.y or 0
     local width = options.width or options.size or 24
@@ -24,7 +25,7 @@ function BankControls.button(parent, content, action, options)
     self.root = ui.Button.new(parent)
     self.root:SetPos(x, y)
     self.root:SetSize(width, height)
-    self.root.text.content = self.spriteName == nil and tostring(content or "") or ""
+    self.root.text.content = self.spriteName == nil and self.spriteID == nil and tostring(content or "") or ""
     if action ~= nil then
         self.root:Subscribe(ui.Hook.ONBUTTONPRESSED, function()
             if not self.disabled then self.action(self, self.active) end
@@ -46,8 +47,10 @@ function BankControls.button(parent, content, action, options)
     end)
 
     -- ui.Button cannot hold children, so its decorations sit beside it and let clicks through
-    if self.spriteName ~= nil then
-        self.sprites = prettyui.Sprites.SPRITE_BUTTONS[self.spriteName]
+    if self.spriteName ~= nil or self.spriteID ~= nil then
+        -- A plain sprite uses the same picture for every button state.
+        self.sprites = self.spriteID ~= nil and { neutral = self.spriteID }
+            or prettyui.Sprites.SPRITE_BUTTONS[self.spriteName]
         self.icon = ui.Sprite.new(parent)
         local iconSize = options.iconSize or math.max(12, height - 8)
         self.icon:SetPos(x + math.floor((width - iconSize) / 2),

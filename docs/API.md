@@ -91,8 +91,9 @@ local ext, reason, detail = bankcore.Register({
 
 - `id`: 1–64 letters, digits, `.`, `_` or `-`; use a stable plugin-specific ID.
 - `name`: nonempty plain text, at most 80 bytes, used for the rail tooltip.
-- `icon`: optional PrettyUI sprite-button name, such as `STAR` or `LIST_LAYOUT`.
-  Omitting it creates an extension without a rail entry.
+- `icon`: optional numeric game sprite ID, or a PrettyUI sprite-button name
+  such as `STAR` or `LIST_LAYOUT`. IDs must be whole numbers from 0 to
+  2,147,483,647. Omitting it creates an extension without a rail entry.
 - `column`: optional sidebar callbacks; requires an icon and a `mount` function.
   `resize` and `unmount` are optional.
 - `customView`: optional function that draws the extension's own view instead of
@@ -109,6 +110,22 @@ column and displayed page and is safe to repeat. After disposal or replacement,
 actions return `false, "stale"`, `IsOpen()` returns false and reads return nil.
 
 ## Sidebar icons and columns
+
+Pass a game sprite ID directly to use a sprite outside PrettyUI's icon list:
+
+```lua
+local ext = bankcore.Register({
+    id = "example.organizer",
+    name = "Bank organizer",
+    icon = 18035, -- Replace with your chosen game sprite ID.
+})
+```
+
+Numeric icons use the same sprite for normal, hovered and selected states.
+The selection frame still marks the active tab. PrettyUI names keep their
+existing state-specific sprites. Icons are drawn at 20 by 20 interface units,
+including while being dragged. Core checks the ID's format; the game must have
+a sprite for that ID to display it.
 
 Core owns the rail's order. A player can drag an icon up or down the rail to
 move it; Core saves the new order in its own preferences and keeps it across
@@ -158,9 +175,32 @@ ext:SetPage({ title = "Supplies", rows = {
 } })
 ```
 
-The only page fields are `title` and `rows`. The title and each label are
-nonempty plain text of at most 80 bytes after trimming. Control characters and
-the client's `<` and `>` markup brackets are refused.
+The page fields are required `rows`, optional `title`, and optional
+`allowNativeDrag`. Omitting `title` hides the heading and its space above the
+rows. A supplied title and each label must be nonempty plain text of at most
+80 bytes after trimming. Control characters and the client's `<` and `>` markup
+brackets are refused.
+
+```lua
+ext:SetPage({ rows = rows }) -- Show items without a page heading.
+```
+
+`allowNativeDrag` must be a boolean and defaults to `false`. Set it to `true`
+for organizer pages that let players drag real bank items from the page onto
+the game's bank tabs:
+
+```lua
+ext:SetPage({
+    title = "Herblore",
+    allowNativeDrag = true,
+    rows = rows,
+})
+```
+
+This uses the game's normal drag-and-drop behavior and changes the real bank.
+It does not rearrange the plugin's page rows. Missing-item pictures cannot be
+dragged. Each `SetPage` call sets this option again; leaving it out disables
+dragging, even if the previous description enabled it.
 
 Each row has either a `label` or a `slots` list. Slots contain numeric object IDs
 or `false` for blank cells; `{ slots = {} }` deliberately leaves an empty line.
@@ -196,9 +236,9 @@ for the object:
 A slot with no matching stack left shows the item's picture with quantity zero,
 without native input. This is a missing-item picture, sometimes called a ghost.
 It can show the item's name, but it cannot withdraw or drag a bank item. A real
-zero-quantity native placeholder can still supply its own tooltip and drag
-behavior, including for several slots sharing it. A blank cell has neither an
-item picture nor native input. Pictures never add bank stacks:
+zero-quantity native placeholder can still supply its own tooltip and, with
+`allowNativeDrag = true`, drag behavior, including for several slots sharing it.
+A blank cell has neither an item picture nor native input. Pictures never add bank stacks:
 `GetBankItems()` lists each native stack once.
 
 The API cannot identify an augmented weapon by its perks or keep a permanent
@@ -248,7 +288,8 @@ Instead of a page, an extension can draw its own view in the bank's item area
 with the client's UI components, then attach a bank item to any component with
 `view:BindItem(element, objectID)`. While the pointer is over a bound component,
 Core moves the real bank stack beneath it, so the game's own tooltip, menu,
-clicks and dragging work there, and restores the stack afterward. The plugin
+and clicks work there, and restores the stack afterward. Dragging stays blocked
+in custom views; `allowNativeDrag` applies to `SetPage` descriptions. The plugin
 never works out stack positions or handles native input.
 
 ```lua
@@ -421,7 +462,7 @@ that takes the wheel.
 
 The plugin draws every picture, border, label and quantity; Core does not change
 the bound components' appearance. Core still decides what the bank allows: a
-native placeholder gives its own tooltip and dragging but is not `interactive`;
+native placeholder gives its own tooltip but is not `interactive`;
 a picture with no stack left shows the item's name and reaches no stack; and a
 stack whose quantity cannot be read takes no input.
 

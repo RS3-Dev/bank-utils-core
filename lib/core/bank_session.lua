@@ -1,5 +1,5 @@
--- Connect the bank view, plugin API, client events, menus and settings
--- Only the core entry point calls Start, so tests can build sessions safely
+-- Connect the bank display, plugins, game events, menus, and settings.
+-- Creating a session does not start it; the main entry point calls Start.
 
 local BankWindowRecord = require("lib/bank/bank_window_record")
 local Config = require("lib/core/config")
@@ -22,7 +22,7 @@ local BANK_ITEMS_SETTLE_TICKS = 128
 local BANK_READY_TICKS_REQUIRED = 8
 local BANK_ATTACH_RETRY_TICKS = 120
 
--- Space out checks while the client's bank updates settle
+-- Check less often as the game's bank updates settle.
 local function shouldCheckBankItems(tick)
     return tick <= 4
         or tick == 8
@@ -33,17 +33,17 @@ local function shouldCheckBankItems(tick)
         or tick == BANK_ITEMS_SETTLE_TICKS
 end
 
--- Check whether the native bank window is currently mounted
+-- Check whether the game's bank window is open.
 local function bankIsOpen()
     return ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__BANK_WINDOW) ~= nil
 end
 
--- Recognize updates for the bank inventory rather than other containers
+-- Check whether an inventory update belongs to the bank.
 local function isBankInventoryEvent(event)
     return event.inv.id == Config.BANK_INVENTORY_ID
 end
 
--- Walk up a component's parents to tell bank menu actions from other windows
+-- Check the control and its parents to see if it belongs to the bank.
 local function belongsToBank(component)
     local current = component
     local depth = 0
@@ -55,7 +55,7 @@ local function belongsToBank(component)
     return false
 end
 
--- Find the bank item represented by native right-click menu entries
+-- Find the bank item named in a right-click menu.
 local function bankItemFromMenu(miniMenu)
     if miniMenu == nil or miniMenu.entries == nil then return nil end
 
@@ -76,7 +76,7 @@ local function bankItemFromMenu(miniMenu)
     return nil
 end
 
--- Check whether the selected menu action came from a bank component
+-- Check whether the chosen menu action belongs to the bank.
 local function selectedEntryBelongsToBank(event)
     local entry = event.entry
     local componentData = entry.componentData
@@ -84,7 +84,7 @@ local function selectedEntryBelongsToBank(event)
     return component ~= nil and belongsToBank(component)
 end
 
--- Recognize All Items and native tab choices by menu verb, ignoring markup and case
+-- Recognize All Items and bank tab actions, ignoring text formatting and case.
 local function bankViewSelection(event)
     if not selectedEntryBelongsToBank(event) then return nil end
     local actionText = string.lower(event.entry.verbText
@@ -99,8 +99,8 @@ local function bankViewSelection(event)
     return nil
 end
 
--- Create the bank session before subscribing to client events
--- Options may replace the saved preferences and bank window record
+-- Create a session without starting event listeners.
+-- Options can supply settings and saved window changes.
 function BankSession.new(options)
     options = options or {}
     local session = setmetatable({
@@ -138,20 +138,20 @@ function BankSession.new(options)
     return session
 end
 
--- End bank readiness checks and reset the retry counters
+-- Stop waiting for the bank to be ready and reset the counters.
 function BankSession:StopLayoutRetry()
     Event.Logic.Unsubscribe(BANK_ATTACH_RETRY_EVENT)
     self.layoutRetryTicks = 0
     self.layoutReadyTicks = 0
 end
 
--- End delayed bank checks after a bank action
+-- Stop follow-up checks after a bank action.
 function BankSession:StopFilterSettle()
     Event.Logic.Unsubscribe(BANK_ITEMS_SETTLE_EVENT)
     self.filterSettleTicks = 0
 end
 
--- Recheck the displayed page while bank updates settle
+-- Keep the displayed plugin page in sync while the bank finishes updating.
 function BankSession:BeginFilterSettle()
     if not self.inGame or self.layout.shownPage == nil then return end
     self:StopFilterSettle()
@@ -174,7 +174,7 @@ function BankSession:BeginFilterSettle()
     end)
 end
 
--- Wait several ready ticks before attaching controls to an opened bank
+-- Wait for several checks to confirm the bank is ready before adding controls.
 function BankSession:BeginLayoutRetry()
     if not self.inGame then return end
     self:StopLayoutRetry()
@@ -201,7 +201,7 @@ function BankSession:BeginLayoutRetry()
     end)
 end
 
--- Save one changed preference and keep the others as they are
+-- Save one setting, keeping the rest unchanged.
 function BankSession:SavePreference(key, value)
     if self.shutDown then return false, "Bank Core is not running." end
     local preferences = {}
@@ -212,7 +212,7 @@ function BankSession:SavePreference(key, value)
     return true
 end
 
--- Save the debug preference and apply it to logging
+-- Save the debug setting, then turn logging on or off.
 function BankSession:SetDebugPreference(enabled)
     local saved, reason = self:SavePreference("enableDebug", enabled == true)
     if not saved then return false, reason end
@@ -220,7 +220,7 @@ function BankSession:SetDebugPreference(enabled)
     return true
 end
 
--- Draw Core's debug setting on the host's content layer
+-- Add Core's debug setting to the game's plugin settings area.
 function BankSession:CreateContentLayer(parent)
     if self.shutDown then return end
     self:DestroyPanel()
@@ -230,13 +230,13 @@ function BankSession:CreateContentLayer(parent)
     })
 end
 
--- Remove Core's settings from the host content layer
+-- Remove Core's settings panel.
 function BankSession:DestroyPanel()
     if self.panel ~= nil then self.panel:Destroy() end
     self.panel = nil
 end
 
--- Stop bank checks and restore the window when leaving the game
+-- Stop bank checks and undo window changes when leaving the game.
 function BankSession:SuspendGameUI()
     self.inGame = false
     self:StopLayoutRetry()
@@ -245,7 +245,7 @@ function BankSession:SuspendGameUI()
     self.layout:Restore()
 end
 
--- Restore in-game state and attach controls if the bank is open
+-- Resume bank handling and add controls if the bank is already open.
 function BankSession:ResumeGameUI()
     if self.shutDown then return end
     self.inGame = true
@@ -253,7 +253,7 @@ function BankSession:ResumeGameUI()
     if bankIsOpen() then self:BeginLayoutRetry() end
 end
 
--- Leave the bank when it closes: stop checks and restore the bank
+-- Stop bank checks and undo window changes when the bank closes.
 function BankSession:CloseBank()
     self:StopLayoutRetry()
     self:StopFilterSettle()
@@ -261,22 +261,22 @@ function BankSession:CloseBank()
     self.layout:Restore()
 end
 
--- Start bank event handling with the saved debug preference
+-- Apply the saved debug setting and start listening for game events.
 function BankSession:Start()
     DebugLog.SetEnabled(self.preferences.enableDebug)
     self.lifecycle:Start()
 end
 
--- Close the extension API, stop events, and restore the bank
--- Failed steps are logged so the bank is still restored
+-- Close plugin access, stop event listeners, and undo bank window changes.
+-- Log page cleanup errors so the remaining shutdown steps can run.
 function BankSession:Shutdown()
     if self.shutDown then return end
-    -- Run one step that must not stop the rest of shutdown
+    -- Catch errors so this step cannot interrupt the rest of shutdown.
     local function close(label, action)
         local ok, message = pcall(action)
         if not ok then debugLog("Bank Core shutdown could not close ", label, ": ", message) end
     end
-    -- The page API closes first so a shown page leaves normally
+    -- Close plugin pages first so the displayed page can clean up normally.
     close("extension pages", function() self.pluginPages:Close() end)
     self.lifecycle:Shutdown()
 end

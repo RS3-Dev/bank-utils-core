@@ -1,5 +1,5 @@
--- Protect native bank input beneath plugin content
--- Match menu entries to the real bank stack Core moved beneath the pointer
+-- Prevent clicks on plugin content from triggering the game's bank actions.
+-- Match menu entries to the actual bank items moved under the mouse.
 
 local BankInterface = require("lib/core/bank_interface")
 local BankItemIndex = require("lib/bank/bank_item_index")
@@ -11,25 +11,25 @@ local debugLog = DebugLog.Write
 local MiniMenuRouter = {}
 MiniMenuRouter.__index = MiniMenuRouter
 
--- Create a menu router for one bank session
+-- Create a menu handler for one bank session.
 function MiniMenuRouter.new(session, options)
     return setmetatable({
         session = session,
         options = options,
-        -- Native item list for one bank item update, reused while the host repeats the menu
+        -- Reuse the game's item list until the bank items change.
         nativeIndex = nil,
     }, MiniMenuRouter)
 end
 
--- Check that a native component is the one a menu entry names
+-- Check whether a menu entry refers to this game control.
 local function sameComponent(component, menuItem)
     return component ~= nil
         and component.categoryID == menuItem.categoryID
         and component.dynamicID == menuItem.dynamicID
 end
 
--- Find a menu item's stack in the native bank item list
--- The list is rebuilt once per bank item update, since the host repeats the menu
+-- Find the bank item stack named in a menu entry.
+-- Rebuild the saved item list only when the bank items change.
 function MiniMenuRouter:NativeEntry(menuItem)
     local bankView = self.session.layout
     local bankSnapshot = self.nativeIndex
@@ -47,7 +47,7 @@ function MiniMenuRouter:NativeEntry(menuItem)
     return nil
 end
 
--- Find the drawn slot beneath the current pointer
+-- Find the displayed plugin page slot under the mouse.
 function MiniMenuRouter:PageSlotAtPointer()
     local bankView = self.session.layout
     local inputBlocker = bankView.itemHover.pageInputBlocker
@@ -60,8 +60,8 @@ function MiniMenuRouter:PageSlotAtPointer()
     return bankView.pageDisplay:EntryAtPosition(bankView.itemHover.drawnPageItems, pageArea, localX, localY)
 end
 
--- Find a page menu's slot: the one over the hovered stack, or else the slot under the pointer
--- The second result is the page item drawn there
+-- Find the slot for the hovered bank stack, or use the mouse if no menu item exists.
+-- Return both the slot details and the item displayed there.
 function MiniMenuRouter:PageMenuSlot(menuItem)
     local bankView = self.session.layout
     local hoveredStack = bankView.itemHover.hoveredBankStack
@@ -79,9 +79,8 @@ function MiniMenuRouter:PageMenuSlot(menuItem)
     return bankView.pageState:Slot(entry.layoutKey), entry
 end
 
--- Describe a menu's bank item for one extension as a fresh table; nothing is changed
--- The slot's position is given only on the extension's own page as drawn, never while a new
--- page waits to be drawn over it
+-- Return a new table of menu item details for a plugin.
+-- Include the slot position only on that plugin's displayed page, with no redraw pending.
 function MiniMenuRouter:Describe(owner, menu)
     local pluginPages, bankView = self.session.pluginPages, self.session.layout
     local menuType = type(menu)
@@ -101,19 +100,19 @@ function MiniMenuRouter:Describe(owner, menu)
         item = { objectID = slot.objectID }
         if pluginPages:ShownPage(owner) ~= nil and not owner.redrawPending then item.slot = slot.position end
     end
-    -- Report whether native actions can reach this item, without returning its component
+    -- Say whether the game's actions can reach the item; keep its control private.
     item.interactive = menuItem ~= nil and self:HasNativeInput(menuItem)
     return item
 end
 
--- Report whether a plugin's entry is the left click
+-- Check whether a plugin supplies the default left-click action.
 local function hasPluginDefaultAction(menu)
     local top = menu.entries[menu.entryCount]
     return top ~= nil and top.actionEntryType == MiniMenuEntryType.PLUGIN
 end
 
--- Report whether native input can reach this stack
--- Exclude stacks moved off screen and clicks covered by a plugin's column
+-- Check whether the game's bank actions can reach this item stack.
+-- Block stacks moved off-screen and items covered by a plugin's sidebar.
 function MiniMenuRouter:HasNativeInput(menuItem)
     local bankView = self.session.layout
     if not self.session.inGame or not self.options.bankIsOpen()
@@ -122,17 +121,15 @@ function MiniMenuRouter:HasNativeInput(menuItem)
         or bankView.itemHover:IsBankStackMovedAside(menuItem.id, menuItem.categoryID,
             menuItem.dynamicID) then return false end
     if bankView.shownPage ~= nil then
-        -- A matched menu item is the hovered stack, whose emptied state is kept current
+        -- The matched stack is under the mouse; its placeholder flag tracks if it is empty.
         return self:PageMenuSlot(menuItem) ~= nil and bankView.itemHover.hoveredBankStack.placeholder ~= true
     end
     local entry = self:NativeEntry(menuItem)
     return entry ~= nil and (entry.quantity or 0) > 0
 end
 
--- Keep Cancel the default where a left click must not reach a native action
--- That covers moved stacks, empty page slots, and columns
--- Keep a plugin's own default action over its sidebar column, or over a custom view, whose
--- plugin can draw controls over its items
+-- Make Cancel the default to prevent clicks on moved items or plugin content.
+-- Keep plugin actions in their sidebar or custom view, where they may draw controls.
 function MiniMenuRouter:ProtectDefault(menu)
     local bankView = self.session.layout
     if bankView == nil or not bankView.active then return end
@@ -153,7 +150,7 @@ function MiniMenuRouter:ProtectDefault(menu)
     end
 end
 
--- Guard native input for one bank menu
+-- Apply click protection to a bank menu.
 function MiniMenuRouter:HandleMenu(event)
     if not self.session.inGame then return end
     if not self.options.bankIsOpen() then return end

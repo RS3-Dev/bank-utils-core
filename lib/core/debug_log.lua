@@ -1,22 +1,22 @@
--- Show optional debug output only when the saved debug setting is on
+-- Write debug messages only when logging is enabled.
 
 local DebugLog = {}
 
 local enabled = false
 
--- Enable optional console output only when the saved debug preference is true
+-- Turn logging on only when the setting is true.
 function DebugLog.SetEnabled(value)
     enabled = value == true
 end
 
--- Send debug messages to the host log only while debugging is on
+-- Write to the game's log if logging is enabled and the log is available.
 local function debugLog(...)
     if enabled and type(log) == "function" then log(...) end
 end
 
 DebugLog.Write = debugLog
 
--- Report whether debug messages are being written
+-- Check whether debug logging is enabled.
 function DebugLog.IsEnabled()
     return enabled
 end

@@ -1,4 +1,4 @@
--- Draw Core's own settings: debug logging
+-- Show Core's debug logging setting.
 
 local CorePanel = {}
 CorePanel.__index = CorePanel
@@ -6,7 +6,7 @@ CorePanel.__index = CorePanel
 local CONTENT_HEIGHT = 94
 local TEXT_COLOUR = 0xD7C9ADFF
 
--- Mount the debug toggle and save status
+-- Create the debug checkbox and save-status message.
 function CorePanel.new(parent, options)
     local preferences = options ~= nil and options.preferences or {}
     local self = setmetatable({
@@ -43,13 +43,13 @@ function CorePanel.new(parent, options)
     return self
 end
 
--- Show a save failure, or hide the status after a success
+-- Show an error if saving failed; otherwise hide the message.
 function CorePanel:ShowResult(saved, reason, defaultMessage)
     self.status.content = saved and "" or tostring(reason or defaultMessage)
     self.status.hidden = saved == true
 end
 
--- Save the debug preference, restoring the checkbox if the save is rejected
+-- Save the debug setting; undo the checkbox change if saving fails.
 function CorePanel:ChangeDebug(enabled)
     if self.destroyed then return false end
     local saved, reason = self.options.onChangeDebug(enabled)
@@ -62,8 +62,8 @@ function CorePanel:ChangeDebug(enabled)
     return saved, reason
 end
 
--- Release controls before the host's content layer goes away
--- The toggle releases its own tooltips; the status text goes with the view
+-- Remove the controls before the game removes their settings area.
+-- The checkbox removes its tooltips; the view removes the status text.
 function CorePanel:Destroy()
     if self.destroyed then return end
     self.destroyed = true

@@ -17,7 +17,7 @@ local NOTIFY_EVENT = Config.CORE_REF .. "_extension_notify"
 local REGISTRATION_FIELDS = { id = true, name = true, icon = true, column = true, customView = true,
     onClose = true, onBankItems = true, onBankClose = true }
 local CALLBACKS = { "customView", "onClose", "onBankItems", "onBankClose" }
-local PAGE_FIELDS = { title = true, rows = true }
+local PAGE_FIELDS = { title = true, rows = true, allowNativeDrag = true }
 local ID_LENGTH = 64
 local TEXT_LENGTH = 80
 
@@ -36,8 +36,8 @@ local function readRegistration(description)
     local registration = { id = id, name = PlainData.Label(rawget(description, "name"), TEXT_LENGTH),
         icon = rawget(description, "icon") }
     if registration.name == nil then return nil, "name must be 1 to " .. TEXT_LENGTH .. " characters" end
-    if registration.icon ~= nil and not PlainData.KnownIcon(registration.icon) then
-        return nil, "icon must be a PrettyUI sprite-button name"
+    if registration.icon ~= nil and not PlainData.ValidIcon(registration.icon) then
+        return nil, "icon must be a sprite ID from 0 to 2147483647 or a PrettyUI sprite-button name"
     end
     if rawget(description, "column") ~= nil then
         if registration.icon == nil then return nil, "a column needs an icon" end
@@ -67,13 +67,22 @@ end
 -- Check a page and keep Core's own copy
 local function readPage(description)
     if type(description) ~= "table" or not hasOnlyFields(description, PAGE_FIELDS) then
-        return nil, "a page is a table of title and rows"
+        return nil, "a page is a table of rows, optional title, and optional allowNativeDrag"
     end
-    local title = PlainData.Label(rawget(description, "title"), TEXT_LENGTH)
-    if title == nil then return nil, "title must be 1 to " .. TEXT_LENGTH .. " characters" end
+    local title = rawget(description, "title")
+    if title == nil then
+        title = "" -- An omitted title leaves no heading or extra space.
+    else
+        title = PlainData.Label(title, TEXT_LENGTH)
+        if title == nil then return nil, "title must be 1 to " .. TEXT_LENGTH .. " characters when provided" end
+    end
+    local allowNativeDrag = rawget(description, "allowNativeDrag")
+    if allowNativeDrag ~= nil and type(allowNativeDrag) ~= "boolean" then
+        return nil, "allowNativeDrag must be a boolean"
+    end
     local rows, problem = PageLayout.ReadRows(rawget(description, "rows"), TEXT_LENGTH)
     if rows == nil then return nil, problem end
-    return { title = title, rows = rows }
+    return { title = title, rows = rows, allowNativeDrag = allowNativeDrag == true }
 end
 
 -- Connect registered plugins to the bank view

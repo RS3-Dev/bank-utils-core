@@ -152,7 +152,7 @@ local function describeVisibleTabs(self)
     local parts = { tostring(self.activeID), self.view.first, self.view.shown,
         tostring(self.view.arrows), tostring(draggedID(self)) }
     for _, tab in ipairs(self.tabs) do
-        parts[#parts + 1] = tab.id .. "|" .. tab.icon .. "|" .. (tab.tooltip or tab.label)
+        parts[#parts + 1] = tab.id .. "|" .. type(tab.icon) .. ":" .. tab.icon .. "|" .. (tab.tooltip or tab.label)
     end
     return table.concat(parts, "\n")
 end
@@ -217,7 +217,8 @@ function SidebarTabRail:Draw()
             y = y,
             size = TAB_SIZE,
             iconSize = ICON_SIZE,
-            spriteName = tab.icon,
+            spriteName = type(tab.icon) == "string" and tab.icon or nil,
+            spriteID = type(tab.icon) == "number" and tab.icon or nil,
             tooltip = tab.tooltip or tab.label,
             active = tab.id == self.activeID,
         })

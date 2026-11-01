@@ -1,18 +1,19 @@
--- Load and save Core's preferences: debug logging and the sidebar icon order
+-- Load and save the debug setting and sidebar icon order.
 local Config = require("lib/core/config")
 local PlainData = require("lib/features/extensions/plain_data")
 local CorePreferences = {}
 
--- Remembered extension IDs, including plugins not loaded now; IDs follow the registration rule
+-- Keep the saved icon order for unloaded plugins too.
 local MAX_RAIL_ORDER = 64
+-- Match the plugin ID length allowed during registration.
 local ID_LENGTH = 64
 
--- Create Core's default preferences
+-- Create the default settings.
 function CorePreferences.defaults()
     return { enableDebug = false, railOrder = {} }
 end
 
--- Copy a saved icon order, dropping invalid and repeated extension IDs
+-- Copy the saved icon order, skipping invalid or duplicate plugin IDs.
 local function readRailOrder(value)
     local railOrder, seen = {}, {}
     if type(value) ~= "table" then return railOrder end
@@ -26,7 +27,7 @@ local function readRailOrder(value)
     return railOrder
 end
 
--- Read valid saved preferences over defaults
+-- Load valid saved settings, using defaults for missing or invalid values.
 function CorePreferences.load()
     local value = CorePreferences.defaults()
     local ok, saved = pcall(function()
@@ -38,7 +39,7 @@ function CorePreferences.load()
     return value
 end
 
--- Save Core's preferences
+-- Save settings and report whether saving succeeded.
 function CorePreferences.save(value)
     local ok, saved = pcall(function()
         return PersistentDB:SetStructuredData(Config.PREFERENCES_KEY,

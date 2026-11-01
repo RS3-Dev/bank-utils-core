@@ -1,4 +1,4 @@
--- Listen to host events for a started bank session and stop listening on shutdown
+-- Start and stop the bank session's game event listeners.
 
 local Config = require("lib/core/config")
 local DebugLog = require("lib/core/debug_log")
@@ -15,7 +15,7 @@ local BANK_UPDATE_EVENT = Config.CORE_REF .. "_bank_update"
 local GAME_STATE_EVENT = Config.CORE_REF .. "_game_state"
 local CONTENT_EVENT = Config.CORE_REF .. "_content"
 
--- Tie the start and stop helpers to one session
+-- Connect event handling to one bank session.
 function Lifecycle.new(session, options)
     return setmetatable({
         session = session,
@@ -23,7 +23,7 @@ function Lifecycle.new(session, options)
     }, Lifecycle)
 end
 
--- Subscribe to the session's events
+-- Listen for game events and send them to the session.
 function Lifecycle:Start()
     local session = self.session
     local options = self.options
@@ -55,7 +55,7 @@ function Lifecycle:Start()
             return
         end
         if session.inGame and options.selectedEntryBelongsToBank(event) then
-            -- A bank action can open or close the preset view, which no event reports
+            -- Check for preset view changes here because they have no separate event.
             session.layout:Changed(false)
             if session.layout.shownPage ~= nil
                 and not session.layout.itemHover:HasHoveredBankStack() then
@@ -84,13 +84,13 @@ function Lifecycle:Start()
     debugLog("Bank Core started its bank session")
 end
 
--- Stop the session's event listeners, remove the core panel, then restore the bank
+-- Stop event listeners, remove Core's panel, and undo bank window changes.
 function Lifecycle:Shutdown()
     local session = self.session
     if session.shutDown then return end
     session.shutDown = true
 
-    -- Keep restoring the bank even if another shutdown step fails
+    -- Catch cleanup errors so later steps can still restore the bank.
     local function cleanup(label, action)
         local ok, message = pcall(action)
         if not ok then
@@ -112,7 +112,7 @@ function Lifecycle:Shutdown()
     local bankView = session.layout
     if bankView == nil then return end
     cleanup("bank layout", function() bankView:Restore() end)
-    -- Saved last so a step that failed before saving is retried
+    -- Save last so any unsaved window changes can be retried later.
     cleanup("bank window record", function() bankView.windowRecord:Save() end)
     session.layout = nil
 end

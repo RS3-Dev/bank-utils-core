@@ -818,7 +818,12 @@ function BankItemHover:RefreshHoveredBankStack(
     bankItem.component, bankItem.quantity = nativeItem, nativeItem.associatedObjectQuantity
     self.bankView.pageDisplay:UpdatePlaceholder(nativeItem, bankItem.instanceKey)
 
-    self:BlockNativeDrag(bankStack)
+    -- Organizer pages can let players drag real items into the game's bank tabs.
+    if self.bankView.shownPage.allowNativeDrag == true then
+        restoreNativeDrag(saveNativeInput(bankStack))
+    else
+        self:BlockNativeDrag(bankStack)
+    end
     self:BindNativeScroll(bankStack)
     self:BindNativeDrop(bankStack)
     bankStack.targetX, bankStack.targetY = hoveredStack.targetX, hoveredStack.targetY

@@ -1,8 +1,8 @@
--- Publish the extension API other plugins use instead of private modules
+-- Let other plugins use Core without accessing its internal files.
 
 local PublicAPI = {}
 
--- Build one extension's methods for its page or view, bank reads, and menus
+-- Give one plugin controls for its page or view, bank details, and menus.
 local function createExtensionHandle(pluginPages, menuRouter, extension)
     return {
         SetPage = function(_, page) return pluginPages:SetPage(extension, page) end,
@@ -17,8 +17,8 @@ local function createExtensionHandle(pluginPages, menuRouter, extension)
     }
 end
 
--- Build the API table for one page service and its menus
--- The host clones it, so it holds only functions
+-- Create the shared plugin API for pages and menus.
+-- Keep only functions here because the game copies this table.
 function PublicAPI.new(pluginPages, menuRouter)
     return {
         Register = function(registration)
