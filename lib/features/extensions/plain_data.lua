@@ -63,14 +63,18 @@ function PlainData.ObjectNumber(entry)
     return objectID
 end
 
--- Accept a game sprite ID or a PrettyUI icon name.
+-- Accept a game sprite ID, PrettyUI icon name, or native sprite constant name.
 function PlainData.ValidIcon(value)
     if type(value) == "number" then
         return value >= 0 and value <= 0x7FFFFFFF and value % 1 == 0
     end
     local sprites = type(prettyui) == "table" and type(prettyui.Sprites) == "table"
         and prettyui.Sprites.SPRITE_BUTTONS or nil
-    return type(value) == "string" and type(sprites) == "table" and rawget(sprites, value) ~= nil
+    if type(value) ~= "string" then return false end
+    if type(sprites) == "table" and rawget(sprites, value) ~= nil then return true end
+    local ok, spriteID = pcall(function() return id.Sprite[value] end)
+    return ok and type(spriteID) == "number" and spriteID >= 0
+        and spriteID <= 0x7FFFFFFF and spriteID % 1 == 0
 end
 
 return PlainData

@@ -51,6 +51,10 @@ function BankControls.button(parent, content, action, options)
         -- A plain sprite uses the same picture for every button state.
         self.sprites = self.spriteID ~= nil and { neutral = self.spriteID }
             or prettyui.Sprites.SPRITE_BUTTONS[self.spriteName]
+        if self.sprites == nil then
+            local ok, spriteID = pcall(function() return id.Sprite[self.spriteName] end)
+            if ok and type(spriteID) == "number" then self.sprites = { neutral = spriteID } end
+        end
         self.icon = ui.Sprite.new(parent)
         local iconSize = options.iconSize or math.max(12, height - 8)
         self.icon:SetPos(x + math.floor((width - iconSize) / 2),

@@ -29,6 +29,7 @@ if package ~= nil and package.loaded ~= nil then
     for _, moduleName in ipairs({
         "lib/bank/bank_item_hover",
         "lib/bank/bank_item_index",
+        "lib/bank/native_tabs",
         "lib/bank/bank_page_items",
         "lib/bank/bank_view",
         "lib/bank/bank_window",

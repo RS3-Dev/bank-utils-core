@@ -116,6 +116,13 @@ end
 local function stackForSlot(stacksByObject, sharedStacks, slot)
     local objectStacks = stacksByObject[slot.objectID]
     if objectStacks == nil then return nil end
+    if slot.bankSlot ~= nil then
+        for _, stack in ipairs(objectStacks) do
+            if stack.bankSlot == slot.bankSlot then return stack end
+        end
+        -- Never substitute a different copy when a filtered page names one native stack.
+        return nil
+    end
     return objectStacks[sharedStacks[slot.objectID] and 1 or slot.occurrence]
 end
 
@@ -203,7 +210,8 @@ function BankPageItems:StacksReassigned(freshBankItems)
     for index, bankItem in ipairs(self.bankItems) do
         local bankItemSnapshot = stacksBySlot[bankItem.instanceKey]
         if bankItemSnapshot == nil or bankItemSnapshot.objectID ~= bankItem.objectID then return true end
-        currentBankItems[index] = { objectID = bankItemSnapshot.objectID, instanceKey = bankItemSnapshot.instanceKey, quantity = bankItemSnapshot.quantity }
+        currentBankItems[index] = { objectID = bankItemSnapshot.objectID, instanceKey = bankItemSnapshot.instanceKey,
+            quantity = bankItemSnapshot.quantity, bankSlot = bankItemSnapshot.bankSlot }
     end
     local previousStacksByObject, currentStacksByObject = groupStacksByObject(self.bankItems), groupStacksByObject(currentBankItems)
     for _, slot in ipairs(self.view.slots) do

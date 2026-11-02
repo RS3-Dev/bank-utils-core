@@ -1,6 +1,6 @@
 # Bank Core API
 
-This reference describes the API shipped with Core 1.1.0. Dependent plugins use
+This reference describes the API shipped with Core 1.4.0. Dependent plugins use
 the API returned by `bankcore`; Core's Lua modules are private to its runtime.
 The [examples](../examples/README.md) show complete, independently loaded plugins.
 
@@ -91,13 +91,17 @@ local ext, reason, detail = bankcore.Register({
 
 - `id`: 1–64 letters, digits, `.`, `_` or `-`; use a stable plugin-specific ID.
 - `name`: nonempty plain text, at most 80 bytes, used for the rail tooltip.
-- `icon`: optional numeric game sprite ID, or a PrettyUI sprite-button name
-  such as `STAR` or `LIST_LAYOUT`. IDs must be whole numbers from 0 to
+- `icon`: optional numeric game sprite ID, PrettyUI sprite-button name
+  such as `STAR`, or native `id.Sprite` constant name such as
+  `RS3_ICON_WARDROBE_VIEW_GRID_24PX_0`. IDs must be whole numbers from 0 to
   2,147,483,647. Omitting it creates an extension without a rail entry.
 - `column`: optional sidebar callbacks; requires an icon and a `mount` function.
   `resize` and `unmount` are optional.
 - `customView`: optional function that draws the extension's own view instead of
   a page; see [Draw a custom view](#draw-a-custom-view).
+- `allowNativeDrag`: optional boolean, default `false`. Sets the drag behavior
+  for the extension's pages and custom view. A `SetPage` description can override
+  it with an explicit `true` or `false` for that page.
 - `onClose`, `onBankItems`, `onBankClose`: optional functions described below.
 
 Extra fields and incorrect types are refused. Registration returns `invalid`
@@ -121,7 +125,7 @@ local ext = bankcore.Register({
 })
 ```
 
-Numeric icons use the same sprite for normal, hovered and selected states.
+Numeric icons and native constant names use the same sprite for every state.
 The selection frame still marks the active tab. PrettyUI names keep their
 existing state-specific sprites. Icons are drawn at 20 by 20 interface units,
 including while being dragged. Core checks the ID's format; the game must have
@@ -185,7 +189,8 @@ brackets are refused.
 ext:SetPage({ rows = rows }) -- Show items without a page heading.
 ```
 
-`allowNativeDrag` must be a boolean and defaults to `false`. Set it to `true`
+`allowNativeDrag` must be a boolean. When omitted, it inherits the registration's
+setting, which defaults to `false`. Set it to `true`
 for organizer pages that let players drag real bank items from the page onto
 the game's bank tabs:
 
@@ -198,12 +203,18 @@ ext:SetPage({
 ```
 
 This uses the game's normal drag-and-drop behavior and changes the real bank.
+It allows all native drag destinations, including rearranging items; Core cannot
+restrict it to dropping onto tabs.
 It does not rearrange the plugin's page rows. Missing-item pictures cannot be
-dragged. Each `SetPage` call sets this option again; leaving it out disables
-dragging, even if the previous description enabled it.
+dragged. Each `SetPage` call sets this option again; leaving it out uses the
+registration's default, rather than the previous page's setting.
 
 Each row has either a `label` or a `slots` list. Slots contain numeric object IDs
 or `false` for blank cells; `{ slots = {} }` deliberately leaves an empty line.
+A slot can also be `{ objectID = 249, bankSlot = 12 }` to target a specific
+current bank stack. `bankSlot` must be a whole number from 1 to 2,147,483,647,
+as returned by `GetBankItems()`. If that slot no longer holds the requested
+item, Core shows a missing-item picture instead of using another copy.
 Object IDs must be whole numbers from 0 to 2,147,483,647. Lists must have no gaps
 or extra keys. A page can contain at most 10,000 rows and slots counted together.
 Validation does not run custom table lookup functions.
@@ -243,8 +254,8 @@ A blank cell has neither an item picture nor native input. Pictures never add ba
 
 The API cannot identify an augmented weapon by its perks or keep a permanent
 identity for unstackable copies. Moving matching items in the native bank can
-change which stack a repeated object ID displays. Plugins cannot request a
-particular stack through this API.
+change which stack a repeated object ID displays. A `bankSlot` reference targets
+one current slot, not a permanent item identity; reread it after bank changes.
 
 ### Open, update and close
 
@@ -288,8 +299,8 @@ Instead of a page, an extension can draw its own view in the bank's item area
 with the client's UI components, then attach a bank item to any component with
 `view:BindItem(element, objectID)`. While the pointer is over a bound component,
 Core moves the real bank stack beneath it, so the game's own tooltip, menu,
-and clicks work there, and restores the stack afterward. Dragging stays blocked
-in custom views; `allowNativeDrag` applies to `SetPage` descriptions. The plugin
+and clicks work there, and restores the stack afterward. Dragging is enabled
+when the registration has `allowNativeDrag = true`. The plugin
 never works out stack positions or handles native input.
 
 ```lua
@@ -468,11 +479,18 @@ stack whose quantity cannot be read takes no input.
 
 ## Read bank state
 
-`ext:GetBankItems()` returns a fresh list of `{ objectID, quantity }`, one record
+`ext:GetBankItems()` returns a fresh list of
+`{ objectID, quantity, bankSlot, nativeTab }`, one record
 per native stack in All Items order. Placeholders have quantity zero. While a
 page is displayed, Core uses the bank positions saved before moving stacks
 beneath its pictures. It returns `nil, reason` for `bank_closed`, `not_all_items`
 or `busy`, including while a displayed page waits for a fresh bank read.
+
+`bankSlot` is the current one-based native inventory slot. `nativeTab` is 1 for
+the main tab or 2–15 for custom tabs. It is nil if the game's tab counts cannot
+be read reliably, including during a partial inventory rebuild. Neither field
+is a permanent item identity. Page order and screen positions do not determine
+tab membership.
 
 `ext:GetBankBounds()` returns a fresh `{ x, y, width, height, columns }` for the
 bank window. Its size includes Core's sidebar, and its position uses the game's

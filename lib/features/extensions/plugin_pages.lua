@@ -2,6 +2,7 @@
 
 local BankInterface = require("lib/core/bank_interface")
 local BankItemIndex = require("lib/bank/bank_item_index")
+local NativeTabs = require("lib/bank/native_tabs")
 local Config = require("lib/core/config")
 local debugLog = require("lib/core/debug_log").Write
 local ExtensionMounts = require("lib/features/extensions/extension_mounts")
@@ -14,7 +15,7 @@ PluginPages.__index = PluginPages
 local TAB_PREFIX = "__bankutils_ext_tab:"
 local REFRESH_EVENT = Config.CORE_REF .. "_extension_refresh"
 local NOTIFY_EVENT = Config.CORE_REF .. "_extension_notify"
-local REGISTRATION_FIELDS = { id = true, name = true, icon = true, column = true, customView = true,
+local REGISTRATION_FIELDS = { id = true, name = true, icon = true, column = true, customView = true, allowNativeDrag = true,
     onClose = true, onBankItems = true, onBankClose = true }
 local CALLBACKS = { "customView", "onClose", "onBankItems", "onBankClose" }
 local PAGE_FIELDS = { title = true, rows = true, allowNativeDrag = true }
@@ -27,7 +28,7 @@ local hasOnlyFields = PlainData.HasOnlyFields
 local function readRegistration(description)
     if type(description) ~= "table" or not hasOnlyFields(description, REGISTRATION_FIELDS) then
         return nil, "a registration is a table of id, name, icon, column, customView, onClose, onBankItems,"
-            .. " and onBankClose"
+            .. " onBankClose and optional allowNativeDrag"
     end
     local id = rawget(description, "id")
     if not PlainData.ID(id, ID_LENGTH) then
@@ -35,9 +36,14 @@ local function readRegistration(description)
     end
     local registration = { id = id, name = PlainData.Label(rawget(description, "name"), TEXT_LENGTH),
         icon = rawget(description, "icon") }
+    local allowNativeDrag = rawget(description, "allowNativeDrag")
+    if allowNativeDrag ~= nil and type(allowNativeDrag) ~= "boolean" then
+        return nil, "allowNativeDrag must be a boolean"
+    end
+    registration.allowNativeDrag = allowNativeDrag == true
     if registration.name == nil then return nil, "name must be 1 to " .. TEXT_LENGTH .. " characters" end
     if registration.icon ~= nil and not PlainData.ValidIcon(registration.icon) then
-        return nil, "icon must be a sprite ID from 0 to 2147483647 or a PrettyUI sprite-button name"
+        return nil, "icon must be a sprite ID from 0 to 2147483647, a PrettyUI name, or a native sprite constant name"
     end
     if rawget(description, "column") ~= nil then
         if registration.icon == nil then return nil, "a column needs an icon" end
@@ -82,7 +88,7 @@ local function readPage(description)
     end
     local rows, problem = PageLayout.ReadRows(rawget(description, "rows"), TEXT_LENGTH)
     if rows == nil then return nil, problem end
-    return { title = title, rows = rows, allowNativeDrag = allowNativeDrag == true }
+    return { title = title, rows = rows, allowNativeDrag = allowNativeDrag }
 end
 
 -- Connect registered plugins to the bank view
@@ -221,6 +227,7 @@ function PluginPages:RegisterOwner(description)
     local customView = registration.customView
     if customView ~= nil then
         extension.page = { owner = extension, key = extension.opens, title = extension.name,
+            allowNativeDrag = registration.allowNativeDrag,
             draw = function(view) return self:RunPluginCallback(extension, "customView", drawView, customView, view) end }
     end
     self.owners[extension.id] = extension
@@ -270,6 +277,8 @@ function PluginPages:SetPage(extension, description)
     end
     local page, problem = readPage(description)
     if page == nil then return false, "invalid", problem end
+    -- Each page can override the plugin's drag setting, including turning it off.
+    if page.allowNativeDrag == nil then page.allowNativeDrag = extension.callbacks.allowNativeDrag == true end
     -- Keep the current opening number so a redraw retains its scroll position
     page.owner, page.key = extension, extension.opens
     extension.page = page
@@ -348,8 +357,10 @@ function PluginPages:BankItems(extension)
     end
     if entries == nil then return nil, "busy" end
     local items = {}
+    local tabSizes = NativeTabs.Read(entries)
     for index, entry in ipairs(entries) do
-        items[index] = { objectID = entry.objectID, quantity = math.max(0, entry.quantity or 0) }
+        items[index] = { objectID = entry.objectID, quantity = math.max(0, entry.quantity or 0),
+            bankSlot = entry.bankSlot, nativeTab = NativeTabs.ForSlot(tabSizes, entry.bankSlot) }
     end
     return items
 end

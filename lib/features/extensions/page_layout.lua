@@ -23,6 +23,13 @@ PageLayout.MAX_HEIGHT = PageLayout.MAX_ENTRIES * GRID_STEP
 -- Read one slot: false for a blank, or an object ID
 local function readSlot(description)
     if description == false then return { kind = "blank" } end
+    if type(description) == "table" then
+        if not PlainData.HasOnlyFields(description, { objectID = true, bankSlot = true }) then return nil end
+        local objectID = PlainData.ObjectNumber(rawget(description, "objectID"))
+        local bankSlot = PlainData.ObjectNumber(rawget(description, "bankSlot"))
+        if objectID == nil or bankSlot == nil or bankSlot < 1 then return nil end
+        return { kind = "item", objectID = objectID, bankSlot = bankSlot }
+    end
     local objectID = PlainData.ObjectNumber(description)
     if objectID == nil then return nil end
     return { kind = "item", objectID = objectID }
@@ -65,7 +72,7 @@ function PageLayout.ReadRows(description, textLength)
             for slotPosition, slotInput in ipairs(slotInputs) do
                 slots[slotPosition] = readSlot(slotInput)
                 if slots[slotPosition] == nil then
-                    return nil, rowDescription .. " slot " .. slotPosition .. " must be an object ID or false"
+                    return nil, rowDescription .. " slot " .. slotPosition .. " must be an object ID, {objectID, bankSlot}, or false"
                 end
             end
             rows[index] = { kind = "row", slots = slots }
@@ -98,9 +105,11 @@ local function placeRows(placedPage, rows, top, columnCount)
                     local slot = {
                         kind = "item",
                         objectID = objectID,
+                        bankSlot = description.bankSlot,
                         occurrence = itemOccurrence,
                         position = slotPosition,
-                        layoutKey = BankItemIndex.LayoutKey(objectID, itemOccurrence),
+                        layoutKey = description.bankSlot and ("bank:" .. description.bankSlot .. ":" .. objectID .. ":" .. itemOccurrence)
+                            or BankItemIndex.LayoutKey(objectID, itemOccurrence),
                         x = GRID_LEFT + ((index - 1) % columnCount) * GRID_STEP,
                         y = top + GRID_TOP + rowOffsetY + (index - 1) // columnCount * GRID_STEP,
                     }

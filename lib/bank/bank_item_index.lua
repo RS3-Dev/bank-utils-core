@@ -45,6 +45,7 @@ function BankItemIndex.Read(bankItemLayer)
                 component = bankComponent,
                 objectID = objectID,
                 instanceKey = BankItemIndex.ComponentKey(bankComponent),
+                bankSlot = bankComponent.dynamicID + 1,
                 x = bankComponent.x,
                 y = bankComponent.y,
                 quantity = bankComponent.associatedObjectQuantity,

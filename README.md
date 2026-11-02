@@ -62,6 +62,10 @@ the [known limitations](docs/API.md#known-limitations) describe that case.
 
 ## Develop a bank plugin
 
+Core 1.4.0 combines optional page titles, native drag settings at registration
+or per page, numeric and named sidebar sprites, and native bank-tab/slot reads.
+See the API reference for field formats and drag-setting precedence.
+
 - [API reference](docs/API.md): register a sidebar, supply an item page or draw a custom
   view, and read menus.
 - [Examples](examples/README.md): a standard page, sidebar controls and a custom page.
