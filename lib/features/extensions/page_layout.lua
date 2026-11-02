@@ -13,8 +13,8 @@ local GRID_STEP = BankGrid.STEP
 -- Reserve this height for the page title
 PageLayout.HEADING_HEIGHT = 28
 -- Offset section labels below the preceding item row
-local LABEL_TOP = 6
-local LABEL_HEIGHT = 34
+local LABEL_TOP = 3
+local LABEL_HEIGHT = PageLayout.HEADING_HEIGHT + LABEL_TOP
 -- Labels, rows, and slots on one page, counted together
 PageLayout.MAX_ENTRIES = 10000
 -- The tallest content a page or custom view may have: a row step for every entry
