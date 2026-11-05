@@ -375,17 +375,26 @@ function PluginPages:BankBounds(extension)
         columns = bankWindowMeasurements.columns }
 end
 
--- Return a fresh snapshot of native bank controls without exposing components.
-function PluginPages:BankState(extension)
-    if not self:IsLive(extension) then return nil, "stale" end
-    local state = { bankOpen = self:BankReady(), viewAll = false, presetOpen = false, searchActive = false }
+-- Read native controls even when no feature plugin is registered.
+function PluginPages:ReadBankState()
+    local state = { bankOpen = self:BankReady(), viewAll = false, presetOpen = false,
+        searchActive = false, filterActive = false }
     if not state.bankOpen then return state end
     local layout = self.layout
     local detected = layout:DetectNativeViewAll()
     if detected == nil then detected = layout.nativeViewAll end
     state.viewAll = detected
     state.presetOpen = layout:IsPresetViewOpen()
-    state.searchActive = layout:IsSearchActive()
+    local mode = layout:ReadNativeFilterMode()
+    state.searchActive = mode == "search"
+    state.filterActive = mode == "filter"
+    return state
+end
+
+-- Return a fresh snapshot of native bank controls without exposing components.
+function PluginPages:BankState(extension)
+    if not self:IsLive(extension) then return nil, "stale" end
+    local state = self:ReadBankState()
     return state
 end
 

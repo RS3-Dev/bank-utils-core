@@ -62,9 +62,11 @@ the [known limitations](docs/API.md#known-limitations) describe that case.
 
 ## Develop a bank plugin
 
-Core 1.4.0 combines optional page titles, native drag settings at registration
-or per page, numeric and named sidebar sprites, and native bank-tab/slot reads.
-See the API reference for field formats and drag-setting precedence.
+Core 1.5.0 adds `GetBankState()` and `onBankStateChanged(state)` for native
+All Items selection, search, filters and presets. Search and filters use the
+shared cancel label's English text to distinguish their modes. The API also
+supports optional page titles, native drag settings, sidebar sprites and native
+bank-tab/slot reads. See the API reference for field formats and callbacks.
 
 - [API reference](docs/API.md): register a sidebar, supply an item page or draw a custom
   view, and read menus.

@@ -1,6 +1,6 @@
 # Bank Core API
 
-This reference describes the API shipped with Core 1.4.0. Dependent plugins use
+This reference describes the API shipped with Core 1.5.0. Dependent plugins use
 the API returned by `bankcore`; Core's Lua modules are private to its runtime.
 The [examples](../examples/README.md) show complete, independently loaded plugins.
 
@@ -533,28 +533,31 @@ replacement or Core shutdown. Register without an icon or page to observe only.
 - `viewAll`: the native All Items tab is selected. False while closed. This does
   not mean the native items are visible: a plugin page or presets can cover them.
 - `presetOpen`: the native preset selector is visible. False while closed.
-- `searchActive`: the native bank search cancel button is visible. False while
-  closed. This reports search mode, including an empty query, rather than the
-  presence of a saved search string.
+- `searchActive`: the visible native cancel label has the text
+  "Cancel Search". False while closed or when the label cannot be recognized.
+- `filterActive`: that control has the text "Clear Filter". False while closed
+  or when the label cannot be recognized. Filtering inside feature plugins does
+  not affect this field. These labels currently support English client text.
 
 These fields describe native bank controls. Switching between plugin pages or
 sidebar columns does not change this state or trigger its callback.
 
-Native tab, search and preset changes are checked every 10 logic ticks (about 200 ms),
+Native tab, search, filter and preset changes are checked every 10 logic ticks (about 200 ms),
 including changes without menu or inventory events. Notifications coalesce to
 the latest state; they are not a history of every click. Modifying a returned
-table does not affect Core or another plugin. Search reads the visible cancel
-button (517, 259), presets read the visible close button (517, 86), and All Items
-reads sprite 8070 on the first dynamic child of its button (517, 166). These
-native component signals still need validation in the live client.
+table does not affect Core or another plugin. Search and filters read `.content`
+from the shared label at `GetComponent(517, 257, 0, 9)`, ignoring formatting tags
+and case. Both the cancel control and label must be visible. Presets read the
+visible close button (517, 86), and All Items reads sprite 8070 on the first
+dynamic child of its button (517, 166).
 
 ```lua
 local ext = bankcore.Register({
     id = "example.observer", name = "Bank observer",
     onBankStateChanged = function(state)
-        -- Hide plugin controls when native search, presets or another tab takes the bank.
+        -- Hide plugin controls while native controls restrict the bank view.
         local available = state.bankOpen and state.viewAll
-            and not state.searchActive and not state.presetOpen
+            and not state.searchActive and not state.filterActive and not state.presetOpen
         updateControls(available)
     end,
 })

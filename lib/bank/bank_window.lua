@@ -30,7 +30,9 @@ local BANK_ITEMS_CONTAINER_STATIC_ID = BankInterface.ITEMS_CONTAINER
 local ALL_TAB_BUTTON_STATIC_ID = 166
 local ALL_TAB_BUTTON_CATEGORY_ID = 0
 local ALL_TAB_BUTTON_DYNAMIC_ID = 0
-local SEARCH_CANCEL_BUTTON_STATIC_ID = 259 -- BANK__BOTTOM_PANEL_CANCEL_BUTTON
+local CANCEL_CONTROL_STATIC_ID = 257 -- BANK__BOTTOM_PANEL_CANCEL
+local CANCEL_LABEL_CATEGORY_ID = 0
+local CANCEL_LABEL_DYNAMIC_ID = 9
 local PRESET_CLOSE_BUTTON_STATIC_ID = 86 -- BANK__PRESET_CLOSE
 local ALL_TAB_SELECTED_SPRITE_ID = 8070 -- BANK_TABS_HORIZONTAL_1
 local ALL_TAB_UNSELECTED_SPRITE_ID = 8069 -- BANK_TABS_HORIZONTAL_0
@@ -500,9 +502,31 @@ local function controlIsVisible(staticID)
     return ok and visible == true
 end
 
--- The native search cancel button is shown while search is active.
+-- Search and native filters use the same text child, confirmed in the live client.
+function BankWindow:ReadNativeFilterMode()
+    if not controlIsVisible(CANCEL_CONTROL_STATIC_ID) then return nil end
+    local label = dynamicComponent(CANCEL_CONTROL_STATIC_ID, CANCEL_LABEL_CATEGORY_ID, CANCEL_LABEL_DYNAMIC_ID)
+    local ok, text = pcall(function()
+        if label == nil or label.hidden == true or label.visible ~= true
+            or label.visibleGlobal == false then return nil end
+        return label.content
+    end)
+    if not ok or type(text) ~= "string" then return nil end
+    text = text:gsub("<[^>]*>", ""):gsub("%s+", " "):match("^%s*(.-)%s*$")
+    local normalized = text:lower()
+    if normalized == "cancel search" then return "search", text end
+    if normalized == "clear filter" then return "filter", text end
+    return nil, text:sub(1, 80)
+end
+
+-- Read the shared control's label rather than treating its presence as search.
 function BankWindow:IsSearchActive()
-    return controlIsVisible(SEARCH_CANCEL_BUTTON_STATIC_ID)
+    return self:ReadNativeFilterMode() == "search"
+end
+
+-- The native filter cancel control is shown while the bank's own filters apply.
+function BankWindow:IsFilterActive()
+    return self:ReadNativeFilterMode() == "filter"
 end
 
 -- The preset close button is shown while the native preset selector is open.
