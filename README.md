@@ -62,7 +62,7 @@ the [known limitations](docs/API.md#known-limitations) describe that case.
 
 ## Develop a bank plugin
 
-Core 1.5.0 adds `GetBankState()` and `onBankStateChanged(state)` for native
+Core 1.1.0 adds `GetBankState()` and `onBankStateChanged(state)` for native
 All Items selection, search, filters and presets. Search and filters use the
 shared cancel label's English text to distinguish their modes. The API also
 supports optional page titles, native drag settings, sidebar sprites and native
