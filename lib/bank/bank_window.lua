@@ -30,7 +30,8 @@ local BANK_ITEMS_CONTAINER_STATIC_ID = BankInterface.ITEMS_CONTAINER
 local ALL_TAB_BUTTON_STATIC_ID = 166
 local ALL_TAB_BUTTON_CATEGORY_ID = 0
 local ALL_TAB_BUTTON_DYNAMIC_ID = 0
-local PRESET_FULL_LAYER_STATIC_ID = 260
+local SEARCH_CANCEL_BUTTON_STATIC_ID = 259 -- BANK__BOTTOM_PANEL_CANCEL_BUTTON
+local PRESET_CLOSE_BUTTON_STATIC_ID = 86 -- BANK__PRESET_CLOSE
 local ALL_TAB_SELECTED_SPRITE_ID = 8070 -- BANK_TABS_HORIZONTAL_1
 local ALL_TAB_UNSELECTED_SPRITE_ID = 8069 -- BANK_TABS_HORIZONTAL_0
 -- Check for window moves and resizes; the client has no event for either
@@ -390,6 +391,9 @@ end
 
 -- Follow bank moves and resizes, and fit the sidebar
 function BankWindow:WatchBankWindow()
+    -- Native panels can change without a menu or inventory event, even while no
+    -- plugin page is shown. Subscribers compare snapshots before notifying plugins.
+    self.onChange()
     if self.expanded then
         -- A missing part must not cause an error here either
         local content = BankInterface.Find(STATIC.content)
@@ -402,7 +406,6 @@ function BankWindow:WatchBankWindow()
     -- Kept in memory; saved when the bank closes or Core stops
     if self.expanded then self:CaptureFrame() end
     self:LogBankWindowMeasurements("changed")
-    self.onChange()
 end
 
 -- Start checking the bank window every few ticks
@@ -487,16 +490,29 @@ function BankWindow:Apply()
     return true
 end
 
--- Read whether the native preset editor is visible
+-- Native controls can remain allocated while hidden, or disappear during a rebuild.
+local function controlIsVisible(staticID)
+    local ok, visible = pcall(function()
+        local control = component(staticID)
+        return control ~= nil and control.hidden ~= true
+            and control.visible == true and control.visibleGlobal ~= false
+    end)
+    return ok and visible == true
+end
+
+-- The native search cancel button is shown while search is active.
+function BankWindow:IsSearchActive()
+    return controlIsVisible(SEARCH_CANCEL_BUTTON_STATIC_ID)
+end
+
+-- The preset close button is shown while the native preset selector is open.
 function BankWindow:IsPresetViewOpen()
-    local preset = component(PRESET_FULL_LAYER_STATIC_ID)
-    if preset == nil or preset.hidden == true then return false end
-    -- The preset panel stays full size when closed, so check whether it is visible
-    return preset.visible == true
+    return controlIsVisible(PRESET_CLOSE_BUTTON_STATIC_ID)
 end
 
 -- Read the native All Items tab state
 function BankWindow:DetectNativeViewAll()
+    -- The button's first dynamic child is its selected/unselected background.
     local tabBackground = dynamicComponent(
         ALL_TAB_BUTTON_STATIC_ID,
         ALL_TAB_BUTTON_CATEGORY_ID,

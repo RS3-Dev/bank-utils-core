@@ -12,6 +12,7 @@ local function createExtensionHandle(pluginPages, menuRouter, extension)
         IsOpen = function() return pluginPages:IsOpen(extension) end,
         GetBankItems = function() return pluginPages:BankItems(extension) end,
         GetBankBounds = function() return pluginPages:BankBounds(extension) end,
+        GetBankState = function() return pluginPages:BankState(extension) end,
         GetMenuItem = function(_, menu) return menuRouter:Describe(extension, menu) end,
         Dispose = function() return pluginPages:DisposeOwner(extension) end,
     }

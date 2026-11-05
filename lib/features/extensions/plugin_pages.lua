@@ -16,8 +16,8 @@ local TAB_PREFIX = "__bankutils_ext_tab:"
 local REFRESH_EVENT = Config.CORE_REF .. "_extension_refresh"
 local NOTIFY_EVENT = Config.CORE_REF .. "_extension_notify"
 local REGISTRATION_FIELDS = { id = true, name = true, icon = true, column = true, customView = true, allowNativeDrag = true,
-    onClose = true, onBankItems = true, onBankClose = true }
-local CALLBACKS = { "customView", "onClose", "onBankItems", "onBankClose" }
+    onClose = true, onBankItems = true, onBankClose = true, onBankStateChanged = true }
+local CALLBACKS = { "customView", "onClose", "onBankItems", "onBankClose", "onBankStateChanged" }
 local PAGE_FIELDS = { title = true, rows = true, allowNativeDrag = true }
 local ID_LENGTH = 64
 local TEXT_LENGTH = 80
@@ -28,7 +28,7 @@ local hasOnlyFields = PlainData.HasOnlyFields
 local function readRegistration(description)
     if type(description) ~= "table" or not hasOnlyFields(description, REGISTRATION_FIELDS) then
         return nil, "a registration is a table of id, name, icon, column, customView, onClose, onBankItems,"
-            .. " onBankClose and optional allowNativeDrag"
+            .. " onBankClose, onBankStateChanged and optional allowNativeDrag"
     end
     local id = rawget(description, "id")
     if not PlainData.ID(id, ID_LENGTH) then
@@ -375,6 +375,20 @@ function PluginPages:BankBounds(extension)
         columns = bankWindowMeasurements.columns }
 end
 
+-- Return a fresh snapshot of native bank controls without exposing components.
+function PluginPages:BankState(extension)
+    if not self:IsLive(extension) then return nil, "stale" end
+    local state = { bankOpen = self:BankReady(), viewAll = false, presetOpen = false, searchActive = false }
+    if not state.bankOpen then return state end
+    local layout = self.layout
+    local detected = layout:DetectNativeViewAll()
+    if detected == nil then detected = layout.nativeViewAll end
+    state.viewAll = detected
+    state.presetOpen = layout:IsPresetViewOpen()
+    state.searchActive = layout:IsSearchActive()
+    return state
+end
+
 -- Run an extension's column or view callback, catching and always logging an error
 -- Returns whether it finished and what it returned
 function PluginPages:RunPluginCallback(extension, name, action, ...)
@@ -406,11 +420,19 @@ function PluginPages:Notify()
 end
 
 -- Call one plugin without letting its error stop other callbacks
-local function callExtensionCallback(extension, name)
+local function callExtensionCallback(extension, name, ...)
     local action = extension.callbacks[name]
     if action == nil then return end
-    local ok, message = pcall(action)
+    local ok, message = pcall(action, ...)
     if not ok then debugLog("Bank Core extension ", extension.id, " ", name, " failed: ", message) end
+end
+
+-- Compare all snapshot fields, including optional fields becoming absent.
+local function sameBankState(first, second)
+    if first == nil then return false end
+    for key, value in pairs(first) do if second[key] ~= value then return false end end
+    for key, value in pairs(second) do if first[key] ~= value then return false end end
+    return true
 end
 
 -- Report whether the bank's items can be read now and are not waiting for a reread
@@ -436,6 +458,16 @@ function PluginPages:DeliverTo(extension)
         if not self:IsLive(extension) then return end
     elseif shown then
         extension.shown = true
+    end
+    if extension.callbacks.onBankStateChanged ~= nil then
+        local state = self:BankState(extension)
+        if not sameBankState(extension.heardState, state) then
+            -- Keep a separate copy so a callback cannot change its comparison baseline.
+            extension.heardState = {}
+            for key, value in pairs(state) do extension.heardState[key] = value end
+            callExtensionCallback(extension, "onBankStateChanged", state)
+            if not self:IsLive(extension) then return end
+        end
     end
     if not self:ItemsReadable() then return end
     local bankView = self.layout

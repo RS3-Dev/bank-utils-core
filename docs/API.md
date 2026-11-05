@@ -68,7 +68,7 @@ shared API in that case.
 
 `bankcore.Register(spec)` returns an extension handle, or `nil, reason, detail`.
 The root API provides only `Register`. The handle provides `SetPage`, `Refresh`,
-`Open`, `Close`, `IsOpen`, `GetBankItems`, `GetBankBounds`, `GetMenuItem` and
+`Open`, `Close`, `IsOpen`, `GetBankItems`, `GetBankBounds`, `GetBankState`, `GetMenuItem` and
 `Dispose`. Both are plain tables of functions, suitable for the client's copied
 dependency exports; they expose no session or real bank component.
 
@@ -86,6 +86,7 @@ local ext, reason, detail = bankcore.Register({
     onClose = function() end,
     onBankItems = function() end,
     onBankClose = function() end,
+    onBankStateChanged = function(state) end,
 })
 ```
 
@@ -102,7 +103,8 @@ local ext, reason, detail = bankcore.Register({
 - `allowNativeDrag`: optional boolean, default `false`. Sets the drag behavior
   for the extension's pages and custom view. A `SetPage` description can override
   it with an explicit `true` or `false` for that page.
-- `onClose`, `onBankItems`, `onBankClose`: optional functions described below.
+- `onClose`, `onBankItems`, `onBankClose`, `onBankStateChanged`: optional functions
+  described below.
 
 Extra fields and incorrect types are refused. Registration returns `invalid`
 with a detail for bad input, `stopped` after Core shuts down, or `busy` when
@@ -499,9 +501,9 @@ native item area if no page is open. It returns nil while closed or attaching.
 
 ## Callbacks
 
-Callbacks take no arguments and normally run on the next logic tick, after the
+Callbacks normally run on the next logic tick, after the
 change has finished. Each extension receives at most one of each pending notice,
-in this order: bank close, page close, items changed. Extensions are notified in
+in this order: bank close, page close, bank state changed, items changed. Extensions are notified in
 ID order, whatever the rail order. Errors are logged without stopping other
 plugins' callbacks.
 
@@ -516,6 +518,48 @@ plugins' callbacks.
   may have changed. Delivery waits for All Items and a fresh bank read. While
   a stack is moved under a stationary pointer, the fresh read can wait until it
   returns to its original position.
+- `onBankStateChanged(state)`: receives an initial snapshot after registration,
+  then a fresh snapshot when any field changes. It works while the extension's
+  page is hidden and while a native tab or presets prevent reading bank items.
+  Other callbacks take no arguments. See the state fields below.
+
+### Native bank state
+
+`ext:GetBankState()` returns a fresh table, or `nil, "stale"` after disposal,
+replacement or Core shutdown. Register without an icon or page to observe only.
+
+- `bankOpen`: Core has attached to the open bank. False while closed, unavailable
+  or still attaching.
+- `viewAll`: the native All Items tab is selected. False while closed. This does
+  not mean the native items are visible: a plugin page or presets can cover them.
+- `presetOpen`: the native preset selector is visible. False while closed.
+- `searchActive`: the native bank search cancel button is visible. False while
+  closed. This reports search mode, including an empty query, rather than the
+  presence of a saved search string.
+
+These fields describe native bank controls. Switching between plugin pages or
+sidebar columns does not change this state or trigger its callback.
+
+Native tab, search and preset changes are checked every 10 logic ticks (about 200 ms),
+including changes without menu or inventory events. Notifications coalesce to
+the latest state; they are not a history of every click. Modifying a returned
+table does not affect Core or another plugin. Search reads the visible cancel
+button (517, 259), presets read the visible close button (517, 86), and All Items
+reads sprite 8070 on the first dynamic child of its button (517, 166). These
+native component signals still need validation in the live client.
+
+```lua
+local ext = bankcore.Register({
+    id = "example.observer", name = "Bank observer",
+    onBankStateChanged = function(state)
+        -- Hide plugin controls when native search, presets or another tab takes the bank.
+        local available = state.bankOpen and state.viewAll
+            and not state.searchActive and not state.presetOpen
+        updateControls(available)
+    end,
+})
+local state = ext:GetBankState()
+```
 
 Disposed or replaced extensions receive no later callbacks. During Core
 shutdown there is no later tick: page-close and bank-close callbacks run
