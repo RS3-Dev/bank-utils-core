@@ -80,6 +80,22 @@ function BankWindowRecord.load()
     return BankWindowRecord.new(record, true)
 end
 
+-- Forget saved geometry only after its persistent copy has been removed.
+function BankWindowRecord:Clear()
+    if self.persisted then
+        local ok, deleted = pcall(function()
+            return not PersistentDB:CheckExists(Config.WINDOW_KEY)
+                or PersistentDB:Delete(Config.WINDOW_KEY)
+        end)
+        if not ok or deleted ~= true then
+            return false, "Could not clear saved bank geometry. Try again."
+        end
+    end
+    self.value = nil
+    self.saved = describeRecord(nil)
+    return true
+end
+
 -- Save the record if it changed; a rejected save retries at the next attach, close, or stop
 function BankWindowRecord:Save()
     local currentSummary = describeRecord(self.value)

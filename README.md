@@ -46,9 +46,11 @@ stack left shows zero.
 
 ## Settings and troubleshooting
 
-Core's plugin panel has one setting: **Enable debug**. It writes diagnostics to
-the client log for troubleshooting; leave it off during normal play. Feature
-plugins have their own settings. Banking Tweaks supplies modifier-click options.
+Core's plugin settings include **Enable debug**, which writes diagnostics to
+the client log, and **Reset geometry**, which clears Core's saved bank window
+adjustments. After resetting, close and reopen the bank to measure a fresh layout.
+Leave debug off during normal play. Feature plugins have their own settings.
+Banking Tweaks supplies modifier-click options.
 
 - **No sidebar:** check that PrettyUI and Core are enabled, then reopen the bank.
 - **No feature icons:** check that the feature plugins and their dependencies loaded.
@@ -62,7 +64,16 @@ the [known limitations](docs/API.md#known-limitations) describe that case.
 
 ## Develop a bank plugin
 
-Core 1.5.0 adds `GetBankState()` and `onBankStateChanged(state)` for native
+The mod.io implementation of Bank Core has ID **6464293**. To depend on it, add
+this entry to your plugin manifest:
+
+```json
+"dependencies": {
+  "bankcore": 6464293
+}
+```
+
+Core 1.1.0 adds `GetBankState()` and `onBankStateChanged(state)` for native
 All Items selection, search, filters and presets. Search and filters use the
 shared cancel label's English text to distinguish their modes. The API also
 supports optional page titles, native drag settings, sidebar sprites and native

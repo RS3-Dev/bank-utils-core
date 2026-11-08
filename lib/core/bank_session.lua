@@ -220,13 +220,29 @@ function BankSession:SetDebugPreference(enabled)
     return true
 end
 
--- Add Core's debug setting to the game's plugin settings area.
+-- Detach before forgetting geometry, so live sidebar offsets can still be undone.
+-- Do not attach again until the next bank opening.
+function BankSession:ResetGeometry()
+    if self.shutDown then return false, "Bank Core is not running." end
+    local ok, message = pcall(function() self:CloseBank() end)
+    if not ok then
+        debugLog("Bank Core could not detach for a geometry reset: ", tostring(message))
+        return false, "Could not reset geometry. Close the bank and try again."
+    end
+    local cleared, reason = self.layout.windowRecord:Clear()
+    if not cleared then return false, reason end
+    self.layout.lastBankWindowMeasurements = nil
+    return true
+end
+
+-- Add Core's settings to the game's plugin settings area.
 function BankSession:CreateContentLayer(parent)
     if self.shutDown then return end
     self:DestroyPanel()
     self.panel = CorePanel.new(parent, {
         preferences = self.preferences,
         onChangeDebug = function(enabled) return self:SetDebugPreference(enabled) end,
+        onResetGeometry = function() return self:ResetGeometry() end,
     })
 end
 

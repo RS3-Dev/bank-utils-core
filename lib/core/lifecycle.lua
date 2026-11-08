@@ -14,6 +14,7 @@ local BANK_CLOSE_EVENT = Config.CORE_REF .. "_bank_close"
 local BANK_UPDATE_EVENT = Config.CORE_REF .. "_bank_update"
 local GAME_STATE_EVENT = Config.CORE_REF .. "_game_state"
 local CONTENT_EVENT = Config.CORE_REF .. "_content"
+local SETTINGS_EVENT = Config.CORE_REF .. "_settings"
 
 -- Connect event handling to one bank session.
 function Lifecycle.new(session, options)
@@ -29,6 +30,9 @@ function Lifecycle:Start()
     local options = self.options
 
     Event.ContentLayerReady.Subscribe(CONTENT_EVENT, function(event)
+        session:CreateContentLayer(event.component)
+    end)
+    Event.SettingsLayerReady.Subscribe(SETTINGS_EVENT, function(event)
         session:CreateContentLayer(event.component)
     end)
 
@@ -100,6 +104,7 @@ function Lifecycle:Shutdown()
 
     Event.MiniMenuReady.Unsubscribe(MENU_EVENT)
     Event.ContentLayerReady.Unsubscribe(CONTENT_EVENT)
+    Event.SettingsLayerReady.Unsubscribe(SETTINGS_EVENT)
     Event.MiniMenuEntrySelected.Unsubscribe(BANK_ACTION_EVENT)
     Event.GameStateChanged.Unsubscribe(GAME_STATE_EVENT)
     Event.InventoryAdded.Unsubscribe(BANK_OPEN_EVENT)

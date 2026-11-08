@@ -1,12 +1,12 @@
--- Show Core's debug logging setting.
+-- Show Core's debug logging and bank geometry settings.
 
 local CorePanel = {}
 CorePanel.__index = CorePanel
 
-local CONTENT_HEIGHT = 94
+local CONTENT_HEIGHT = 186
 local TEXT_COLOUR = 0xD7C9ADFF
 
--- Create the debug checkbox and save-status message.
+-- Create the debug checkbox, geometry reset, and status message.
 function CorePanel.new(parent, options)
     local preferences = options ~= nil and options.preferences or {}
     local self = setmetatable({
@@ -34,8 +34,16 @@ function CorePanel.new(parent, options)
     for _, option in ipairs(self.debugToggle.items or {}) do
         option.label.font = id.Font.MUSEO_SANS_11PT_REGULAR
     end
+    self.resetGeometry = prettyui.SimpleButton.new(content, "Reset geometry", function()
+        self:ResetGeometry()
+    end, { x = x, y = 48, width = math.min(width, 180), height = 32 })
+    prettyui.Text.new(content, {
+        text = "Clear saved bank geometry, then close and reopen the bank.",
+        x = x, y = 88, width = width, height = 40,
+        font = id.Font.MUSEO_SANS_11PT_REGULAR, colour = TEXT_COLOUR, maxLines = 2,
+    })
     self.status = prettyui.Text.new(content, {
-        text = "", x = x, y = 48, width = width, height = 40,
+        text = "", x = x, y = 134, width = width, height = 40,
         font = id.Font.MUSEO_SANS_11PT_REGULAR,
         colour = 0xE57373FF, maxLines = 2,
     })
@@ -45,8 +53,22 @@ end
 
 -- Show an error if saving failed; otherwise hide the message.
 function CorePanel:ShowResult(saved, reason, defaultMessage)
+    self.status.rgba = 0xE57373FF
     self.status.content = saved and "" or tostring(reason or defaultMessage)
     self.status.hidden = saved == true
+end
+
+-- Confirm the reset and explain when the fresh layout will be measured.
+function CorePanel:ResetGeometry()
+    if self.destroyed then return false end
+    local cleared, reason = self.options.onResetGeometry()
+    self:ShowResult(cleared, reason, "Could not reset bank geometry.")
+    if cleared then
+        self.status.content = "Geometry cleared. Close and reopen the bank."
+        self.status.rgba = TEXT_COLOUR
+        self.status.hidden = false
+    end
+    return cleared, reason
 end
 
 -- Save the debug setting; undo the checkbox change if saving fails.
@@ -68,6 +90,7 @@ function CorePanel:Destroy()
     if self.destroyed then return end
     self.destroyed = true
     self.debugToggle:Destroy()
+    self.resetGeometry:Destroy()
     self.view:Destroy()
 end
 

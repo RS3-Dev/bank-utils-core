@@ -118,8 +118,10 @@ function Scrollbar:ScrollFromTrack(trackY, contentHeight)
     return math.max(0, math.min(travel, thumbY)) / travel * maxScrollY
 end
 
+-- Show controls only for overflowing content; the caller's backdrop still covers the bank's bar
 -- Place every part for the content height and offset, then order them
 function Scrollbar:Refresh(contentHeight, scrollY)
+    local hidden = contentHeight <= self.height
     local trackHeight = self:TrackHeight()
     local thumbHeight = self:ThumbHeight(contentHeight)
     local thumbY = ARROW_HEIGHT + thumbOffset(self, contentHeight, scrollY)
@@ -133,7 +135,10 @@ function Scrollbar:Refresh(contentHeight, scrollY)
     setBounds(self.thumbMiddle, THUMB_X, thumbY + capHeight, THUMB_WIDTH,
         math.max(1, thumbHeight - capHeight * 2))
     setBounds(self.thumbBottom, THUMB_X, thumbY + thumbHeight - capHeight, THUMB_WIDTH, capHeight)
-    for _, key in ipairs(PART_ORDER) do self[key]:MoveToFront() end
+    for _, key in ipairs(PART_ORDER) do
+        self[key].hidden = hidden
+        self[key]:MoveToFront()
+    end
 end
 
 return NativeUi
