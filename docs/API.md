@@ -1,6 +1,6 @@
 # Bank Core API
 
-This reference describes the API shipped with Core 1.1.0. Dependent plugins use
+This reference describes the API shipped with Core 1.5.0. Dependent plugins use
 the API returned by `bankcore`; Core's Lua modules are private to its runtime.
 The [examples](../examples/README.md) show complete, independently loaded plugins.
 
