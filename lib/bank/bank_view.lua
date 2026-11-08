@@ -48,8 +48,6 @@ function BankView.new(options)
         itemHover = nil,
         -- Told when the bank view changes; the extension service sets it
         onChange = function() end,
-        -- Use the session's normal close path if the window watcher detects closure.
-        onBankClosed = options.onBankClosed,
         -- Counts changes that may affect item identities or quantities
         itemsGeneration = 0,
         -- Page changes in progress; extension requests wait while nonzero

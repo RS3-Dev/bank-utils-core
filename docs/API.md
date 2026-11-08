@@ -634,18 +634,10 @@ coordinates, perform a drop itself, or provide plugins with drop callbacks.
   width and movement when restoring the bank. Player resizes are preserved. It
   checks window size and position every 10 ticks because native resize events
   have not been verified for this use.
-- Bank inventory removal and game-state changes restore the bank through Core's
-  normal close path. The existing window watcher also checks visibility every
-  10 ticks while Core is attached, to catch closure without an inventory event.
-  It stops on close; there is no additional always-on visibility watcher.
-  Exiting the client with the bank still open depends on the client running
-  plugin shutdown before saving its window layout; abrupt exit cannot guarantee
-  restoration.
 - A client component can ignore or refuse restoration after it disappears.
   Core keeps a record under `bankcore:window:v1`, checks the current components
-  before adding sidebar space again, and retries unfinished restoration on
-  unload even if the bank layout is inactive, or on a later attach. It does not
-  widen again until that recovery succeeds.
+  before adding sidebar space again, and retries unfinished restoration on a
+  later attach. It does not widen again until that recovery succeeds.
 - While Core is disabled, a player-chosen window width exactly matching the
   recorded widened width is indistinguishable from a leftover expansion. Core
   subtracts the sidebar width in that case. Native minimum-width behavior and

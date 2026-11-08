@@ -288,8 +288,7 @@ end
 function BankWindow:CaptureFrame()
     local record = self.windowRecord.value
     local entry = record ~= nil and findFrameRecord(record) or nil
-    local value = entry ~= nil and (findCurrentFrame(entry.slot)
-        or findPartByName(self.components, entry.slot)) or nil
+    local value = entry ~= nil and findPartByName(self.components, entry.slot) or nil
     if value == nil then return end
     local partLayout = tryReadPartLayout(value)
     if partLayout == nil then
@@ -329,31 +328,17 @@ end
 -- Keep size changes the player made while the sidebar was open
 -- Keep the record in case the client brings back the wider size
 function BankWindow:RestoreBankWindowSizeAndPosition()
-    -- Closed banks can leave a saved expansion without an active layout. Do not
-    -- mistake an already restored frame for the expanded size in that case.
-    if self.expansion ~= nil then BankWindow.CaptureFrame(self) end
-    local foundParts, parts = pcall(lookUpParts)
-    local offsets = {}
-    for _, change in ipairs(self.expansion or {}) do
-        -- The client can replace handles while the bank is open. Restore the
-        -- current component, including any resize made since the last watch.
-        offsets[#offsets + 1] = {
-            slot = change.slot,
-            value = foundParts and findPartByName(parts, change.slot) or change.value,
-            x = change.x, width = change.width,
-        }
-    end
-    local allPartsRestored = undoExpansion(offsets)
+    BankWindow.CaptureFrame(self)
+    local allPartsRestored = undoExpansion(self.expansion or {})
     self.expansion = nil
     local record = self.windowRecord.value
     if record == nil then return end
     local entry = findFrameRecord(record)
     local partLayout = frameOffsets(entry)
-    -- Recover every part, even if the frame was already restored or the bank
-    -- closed before unload. A frame's width does not prove its children reset.
-    if foundParts then
+    -- A handle held since attach may be replaced; undo what still shows on fresh ones
+    if partLayout ~= nil and partLayout.width == entry.expandedWidth then
         local ok, message = pcall(function()
-            allPartsRestored = BankWindow.RecoverExpansion(parts, record) and allPartsRestored
+            allPartsRestored = BankWindow.RecoverExpansion(lookUpParts(), record)
         end)
         if not ok then debugLog("Bank Core could not look up the bank's parts: ", message) end
         -- A later attach decides again from the offsets it finds
@@ -408,12 +393,6 @@ end
 
 -- Follow bank moves and resizes, and fit the sidebar
 function BankWindow:WatchBankWindow()
-    -- Inventory removal and game-state events normally close the layout. Reuse
-    -- this existing 10-tick watch if the bank hides without either event.
-    if self.expanded and not BankInterface.IsOpen() then
-        if self.onBankClosed ~= nil then self.onBankClosed() else self:Restore() end
-        return
-    end
     -- Native panels can change without a menu or inventory event, even while no
     -- plugin page is shown. Subscribers compare snapshots before notifying plugins.
     self.onChange()
@@ -588,9 +567,7 @@ function BankWindow:Restore()
     self.nativeViewAll = false
     step(function() self:DestroyRail() end)
     step(function() self:StopBankWindowWatch() end)
-    if self.active or self.windowRecord.value ~= nil then
-        step(function() self:RestoreBankWindowSizeAndPosition() end)
-    end
+    if self.active then step(function() self:RestoreBankWindowSizeAndPosition() end) end
     self.active = false
     self.expanded = false
     self.components = {}

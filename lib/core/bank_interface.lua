@@ -19,16 +19,4 @@ function BankInterface.Find(staticID)
     return ok and value or nil
 end
 
--- Inventories and the top-level window can stay allocated after the bank closes.
--- Use the bank interface's visibility to detect its actual open/close transitions.
-function BankInterface.IsOpen()
-    local ok, open = pcall(function()
-        local bank = ui.Interfaces:GetInterface(Config.BANK_INTERFACE_ID)
-        local root = bank ~= nil and bank:GetComponent(0) or nil
-        return root ~= nil and root.hidden ~= true and root.visibleGlobal ~= false
-            and ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__BANK_WINDOW) ~= nil
-    end)
-    return ok and open == true
-end
-
 return BankInterface
