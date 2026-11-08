@@ -2,6 +2,7 @@
 -- Creating a session does not start it; the main entry point calls Start.
 
 local BankWindowRecord = require("lib/bank/bank_window_record")
+local BankInterface = require("lib/core/bank_interface")
 local Config = require("lib/core/config")
 local CorePanel = require("lib/core/core_panel")
 local CorePreferences = require("lib/core/core_preferences")
@@ -35,7 +36,7 @@ end
 
 -- Check whether the game's bank window is open.
 local function bankIsOpen()
-    return ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__BANK_WINDOW) ~= nil
+    return BankInterface.IsOpen()
 end
 
 -- Check whether an inventory update belongs to the bank.
@@ -117,6 +118,7 @@ function BankSession.new(options)
     }, BankSession)
     session.layout = BankView.new({
         windowRecord = options.windowRecord or BankWindowRecord.load(),
+        onBankClosed = function() session:CloseBank() end,
         readRailOrder = function() return session.preferences.railOrder end,
         saveRailOrder = function(railOrder) return session:SavePreference("railOrder", railOrder) end,
     })
