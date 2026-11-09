@@ -1,18 +1,16 @@
--- Validate plugin input without running custom table lookup functions
+-- Check plugin data without running custom table lookups.
 
 local PlainData = {}
 
 local ID_PATTERN = "^[%w_%.%-]+$"
 local MAX_OBJECT_ID = 0x7FFFFFFF
 
--- Accept an extension identifier within a length limit
 function PlainData.ID(value, limit)
     return type(value) == "string"
         and #value <= limit
         and string.match(value, ID_PATTERN) ~= nil
 end
 
--- Read a trimmed, non-empty display text within a length limit
 function PlainData.Text(value, limit)
     if type(value) ~= "string" then return nil end
     local trimmed = string.match(value, "^%s*(.-)%s*$")
@@ -20,7 +18,7 @@ function PlainData.Text(value, limit)
     return trimmed
 end
 
--- Copy a plain array, refusing gaps, extra keys, and long lists
+-- Reject gaps, extra keys, and oversized lists.
 function PlainData.Array(value, limit)
     if type(value) ~= "table" then return nil end
     local entries = {}
@@ -38,14 +36,13 @@ function PlainData.Array(value, limit)
     return entries
 end
 
--- Read display text, refusing control characters and the client's markup brackets
+-- Reject control characters and game markup.
 function PlainData.Label(value, limit)
     local text = PlainData.Text(value, limit)
     if text == nil or string.find(text, "[%c<>]") then return nil end
     return text
 end
 
--- Check that a table names only the allowed fields
 function PlainData.HasOnlyFields(value, allowed)
     for key in next, value do
         if not allowed[key] then return false end
@@ -53,7 +50,6 @@ function PlainData.HasOnlyFields(value, allowed)
     return true
 end
 
--- Read an object ID, or nil when it is not a whole ID in range
 function PlainData.ObjectNumber(entry)
     if math.type(entry) ~= "integer" and not (math.type(entry) == "float" and entry % 1 == 0) then
         return nil
@@ -63,7 +59,7 @@ function PlainData.ObjectNumber(entry)
     return objectID
 end
 
--- Accept a game sprite ID, PrettyUI icon name, or native sprite constant name.
+-- Accept game sprite IDs, PrettyUI names, or sprite constant names.
 function PlainData.ValidIcon(value)
     if type(value) == "number" then
         return value >= 0 and value <= 0x7FFFFFFF and value % 1 == 0

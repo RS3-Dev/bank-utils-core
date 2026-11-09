@@ -1,30 +1,25 @@
--- Read and index the bank's real item components
--- Native slot IDs locate components; matching-item numbers describe bank order
+-- Find bank stacks by slot or their order among matching items.
 
 local BankItemIndex = {}
 
--- Read the item ID associated with a native bank component
 function BankItemIndex.ObjectID(component)
     return component ~= nil and component.associatedObjectID or nil
 end
 
--- Build a lookup key from the client's slot IDs
 function BankItemIndex.ComponentKey(component)
     local categoryID, dynamicID = component.categoryID, component.dynamicID
     if categoryID == dynamicID then return dynamicID end
     return "component:" .. categoryID .. ":" .. dynamicID
 end
 
--- Build a key from the item ID and its number among matching stacks
+-- Match an item ID and its place among copies.
 function BankItemIndex.LayoutKey(objectID, stackNumber)
     stackNumber = stackNumber or 1
     if objectID == nil then return nil end
     return "object:" .. tostring(objectID) .. ":" .. tostring(stackNumber)
 end
 
--- Sort by row, then column, then native slot ID
--- These numbers follow bank order, so moving a stack can change its number
--- They do not distinguish weapons by perks or other item details
+-- Number copies in bank order; perks and other item details do not distinguish them.
 local function comesFirstInBank(firstItem, secondItem)
     if firstItem.y == secondItem.y then
         if firstItem.x == secondItem.x then
@@ -35,7 +30,7 @@ local function comesFirstInBank(firstItem, secondItem)
     return firstItem.y < secondItem.y
 end
 
--- Read native bank components in the order the client supplies them
+-- Keep the game's item order.
 function BankItemIndex.Read(bankItemLayer)
     local bankItems = {}
     bankItemLayer:IterateDynamicComponents(function(bankComponent)
@@ -56,7 +51,6 @@ function BankItemIndex.Read(bankItemLayer)
     return bankItems
 end
 
--- Sort bank stacks and number repeated item IDs
 function BankItemIndex.Collect(bankItemLayer)
     local bankItems = BankItemIndex.Read(bankItemLayer)
     table.sort(bankItems, comesFirstInBank)

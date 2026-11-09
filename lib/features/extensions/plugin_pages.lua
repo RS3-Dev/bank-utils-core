@@ -1,4 +1,4 @@
--- Manage registered plugins, their sidebar columns, and the displayed page
+-- Manage plugin registrations, sidebar content, and pages.
 
 local BankInterface = require("lib/core/bank_interface")
 local BankItemIndex = require("lib/bank/bank_item_index")
@@ -24,7 +24,7 @@ local TEXT_LENGTH = 80
 
 local hasOnlyFields = PlainData.HasOnlyFields
 
--- Check a registration and keep Core's own copy
+-- Check plugin details and keep a copy.
 local function readRegistration(description)
     if type(description) ~= "table" or not hasOnlyFields(description, REGISTRATION_FIELDS) then
         return nil, "a registration is a table of id, name, icon, column, customView, onClose, onBankItems,"
@@ -59,8 +59,7 @@ local function readRegistration(description)
     return registration
 end
 
--- Run a plugin's custom view and check the content height it returns
--- A height is nil or a number from 0 to the height limit for a page
+-- Check the custom view's returned height.
 local function drawView(customView, view)
     local height = customView(view)
     if height ~= nil and (type(height) ~= "number" or height ~= height or height < 0
@@ -70,7 +69,7 @@ local function drawView(customView, view)
     return height
 end
 
--- Check a page and keep Core's own copy
+-- Check the page and keep a copy.
 local function readPage(description)
     if type(description) ~= "table" or not hasOnlyFields(description, PAGE_FIELDS) then
         return nil, "a page is a table of rows, optional title, and optional allowNativeDrag"
@@ -91,19 +90,18 @@ local function readPage(description)
     return { title = title, rows = rows, allowNativeDrag = allowNativeDrag }
 end
 
--- Connect registered plugins to the bank view
 function PluginPages.new(bankView, options)
     local self = setmetatable({
         layout = bankView,
         isInGame = options.isInGame,
         bankIsOpen = options.bankIsOpen,
         owners = {},
-        -- Defer rail changes until running column and view callbacks finish
+        -- Wait for plugin drawing to finish before changing tabs.
         pluginCallbacks = 0,
         publishPending = false,
         closed = false,
     }, PluginPages)
-    -- Give this service unique event names so a reload cannot remove another service's listeners
+    -- Unique listener names prevent reloads from removing another service's listeners.
     local eventSuffix = ":" .. string.match(tostring(self), "%x+$")
     self.refreshEvent = REFRESH_EVENT .. eventSuffix
     self.notifyEvent = NOTIFY_EVENT .. eventSuffix
@@ -111,23 +109,20 @@ function PluginPages.new(bankView, options)
     return self
 end
 
--- Report whether a page change or a column or view callback is running now
 function PluginPages:IsChanging()
     return self.layout.pageTransitions > 0 or self.pluginCallbacks > 0
 end
 
--- Report whether the bank is open with Core attached
 function PluginPages:BankReady()
     return self.isInGame() and self.bankIsOpen() and self.layout.active
 end
 
--- Report whether the bank shows its All Items tab
 function PluginPages:ViewAll()
     local bankView = self.layout
     return bankView.nativeViewAll or bankView:DetectNativeViewAll() == true
 end
 
--- Explain why a page cannot be shown now, or return nil when it can
+-- Explain why the page cannot open, or return nil.
 function PluginPages:OpenBlocker()
     if not self:BankReady() or BankInterface.Get(BankInterface.ITEMS) == nil then
         return "bank_closed"
@@ -138,22 +133,18 @@ function PluginPages:OpenBlocker()
     return nil
 end
 
--- Check that an extension still belongs to this live service
 function PluginPages:IsLive(extension)
     return not self.closed and self.owners[extension.id] == extension
 end
 
--- Find the page the bank shows now when it is the extension's, or nil
 function PluginPages:ShownPage(extension)
     local page = self.layout.shownPage
     return page ~= nil and page.owner == extension and page or nil
 end
 
--- Give the sidebar rail an entry for every extension with an icon, by ID
--- The sidebar arranges them in the player's order
--- An entry without a column opens the extension's page instead of being selected
+-- Build sidebar tabs for plugins with icons.
 function PluginPages:PublishTabs()
-    -- A column may be running inside the sidebar rebuild, so publish next tick
+    -- Wait until the sidebar finishes rebuilding.
     if self.pluginCallbacks > 0 then
         self.publishPending = true
         self:QueueRefresh()
@@ -175,14 +166,13 @@ function PluginPages:PublishTabs()
     self.layout:SetExtensionTabs(tabs)
 end
 
--- Run a bank page change, logging a failure the bank has already recovered from
+-- Log page-change failures after the bank recovers.
 function PluginPages:Transition(action)
     local ok, result = pcall(action)
     if not ok then debugLog("Bank Core could not change the extension page: ", result) end
     return ok, result
 end
 
--- Finish held-back work on the next logic tick
 function PluginPages:QueueRefresh()
     if self.closed then return end
     Event.Logic.Subscribe(self.refreshEvent, function()
@@ -191,7 +181,7 @@ function PluginPages:QueueRefresh()
     end)
 end
 
--- Finish work held back while a column callback or a page change ran
+-- Finish work delayed by drawing or page changes.
 function PluginPages:RunQueued()
     if self.publishPending then self:PublishTabs() end
     self:LeaveRemovedPage()
@@ -199,11 +189,11 @@ function PluginPages:RunQueued()
     if page ~= nil and page.owner.redrawPending then self:Redraw(page.owner) end
 end
 
--- Return the bank to its native view when the shown page's extension is gone
+-- Return to the bank when the page's plugin is gone.
 function PluginPages:LeaveRemovedPage()
     local page = self.layout.shownPage
     if page == nil or self:IsLive(page.owner) then return end
-    -- A running page change finishes first; the next tick leaves the page
+    -- Leave the page next tick, after the current change finishes.
     if self:IsChanging() then
         self:QueueRefresh()
         return
@@ -211,19 +201,19 @@ function PluginPages:LeaveRemovedPage()
     self:Transition(function() self.layout:ShowPage(nil) end)
 end
 
--- Register an extension, replacing an earlier one with the same ID
+-- Register a plugin, replacing any with the same ID.
 function PluginPages:RegisterOwner(description)
     if self.closed then return nil, "stopped" end
     if self.pluginCallbacks > 0 then return nil, "busy" end
     local registration, problem = readRegistration(description)
     if registration == nil then return nil, "invalid", problem end
-    -- The replacement publishes the rail once, so a selected column stays selected
+    -- Publish tabs once to preserve the selected column.
     local previous = self.owners[registration.id]
     if previous ~= nil then self:DisposeOwner(previous, true) end
     local extension = { id = registration.id, name = registration.name, icon = registration.icon, callbacks = registration,
         page = nil, opens = 0, shown = false, heardItems = nil, bankClosed = false }
     if registration.column ~= nil then extension.mount = ExtensionMounts.new(self, extension, registration.column) end
-    -- A custom view can open at once; Core draws its page by running the plugin's callback
+    -- Custom views can open immediately.
     local customView = registration.customView
     if customView ~= nil then
         extension.page = { owner = extension, key = extension.opens, title = extension.name,
@@ -231,19 +221,17 @@ function PluginPages:RegisterOwner(description)
             draw = function(view) return self:RunPluginCallback(extension, "customView", drawView, customView, view) end }
     end
     self.owners[extension.id] = extension
-    -- The rail changes next tick, so no column mounts before the plugin has its extension
+    -- Wait until the plugin has its handle before drawing its sidebar.
     if extension.icon ~= nil or (previous ~= nil and previous.icon ~= nil) then
         self.publishPending = true
         self:QueueRefresh()
     end
-    -- Notify the new extension when bank items become readable
+    -- Notify the plugin once bank items are readable.
     self:Notify()
     return extension
 end
 
--- Remove an extension with its rail entry and shown page; repeating does nothing
--- A shown page is emptied at once, so a rebuild before the bank leaves it draws nothing
--- A replaced extension leaves publishing the rail to its replacement
+-- Remove the plugin and empty its page immediately.
 function PluginPages:DisposeOwner(extension, replaced)
     if not self:IsLive(extension) then return true end
     self.owners[extension.id] = nil
@@ -254,8 +242,7 @@ function PluginPages:DisposeOwner(extension, replaced)
     return true
 end
 
--- Draw the extension's page again in place, or next tick during a page change
--- A failed redraw returns the bank to its own view
+-- Redraw now, or after the current page change finishes.
 function PluginPages:Redraw(extension)
     extension.redrawPending = false
     if self:ShownPage(extension) == nil or not self:IsLive(extension) then return end
@@ -267,9 +254,7 @@ function PluginPages:Redraw(extension)
     self:Transition(function() return self.layout:ShowPage(extension.page) end)
 end
 
--- Keep the extension's page, drawing it again next tick when the bank shows it
--- Opening before that tick draws the latest page and cancels the queued redraw
--- An extension that draws a custom view has no page to set
+-- Save the page and queue a redraw; custom views cannot set pages.
 function PluginPages:SetPage(extension, description)
     if not self:IsLive(extension) then return false, "stale" end
     if extension.callbacks.customView ~= nil then
@@ -277,9 +262,9 @@ function PluginPages:SetPage(extension, description)
     end
     local page, problem = readPage(description)
     if page == nil then return false, "invalid", problem end
-    -- Each page can override the plugin's drag setting, including turning it off.
+    -- Pages can override the plugin's drag setting.
     if page.allowNativeDrag == nil then page.allowNativeDrag = extension.callbacks.allowNativeDrag == true end
-    -- Keep the current opening number so a redraw retains its scroll position
+    -- Keep the opening ID to preserve scroll.
     page.owner, page.key = extension, extension.opens
     extension.page = page
     if self:ShownPage(extension) ~= nil then
@@ -289,8 +274,7 @@ function PluginPages:SetPage(extension, description)
     return true
 end
 
--- Draw the extension's shown page or view again next tick; a hidden one is left alone
--- Refused while a page change or callback runs, so a view cannot keep redrawing itself
+-- Queue a redraw; reject requests during drawing to prevent loops.
 function PluginPages:Refresh(extension)
     if not self:IsLive(extension) then return false, "stale" end
     if self:IsChanging() then return false, "busy" end
@@ -301,24 +285,23 @@ function PluginPages:Refresh(extension)
     return true
 end
 
--- Show the extension's page in place of whatever the bank shows, or explain why not
+-- Open the plugin's page, or explain why it cannot open.
 function PluginPages:Open(extension)
     if not self:IsLive(extension) then return false, "stale" end
     if extension.page == nil then return false, "no_page" end
     local blockedReason = self:OpenBlocker()
     if blockedReason ~= nil then return false, blockedReason end
-    -- Each opening is a new view that starts at the top, and draws the current page itself
+    -- Start each new opening at the top.
     extension.redrawPending = false
     extension.opens = extension.opens + 1
     extension.page.key = extension.opens
     local ok, shown = self:Transition(function() return self.layout:ShowPage(extension.page) end)
-    -- A half-built page is not left showing; the bank is back in its native view
+    -- A failed page returns to the normal bank.
     if not ok or not shown then return false, "failed" end
     extension.shown = true
     return true
 end
 
--- Return the bank to its own view when it shows the extension's page
 function PluginPages:ClosePage(extension)
     if not self:IsLive(extension) then return false, "stale" end
     if self:ShownPage(extension) == nil then return true end
@@ -327,20 +310,18 @@ function PluginPages:ClosePage(extension)
     return true
 end
 
--- Report whether the bank shows the extension's page
 function PluginPages:IsOpen(extension)
     return self:IsLive(extension) and self:ShownPage(extension) ~= nil
 end
 
--- Explain why bank items cannot be read now, or return nil when they can
+-- Explain why bank items are unreadable, or return nil.
 function PluginPages:ItemsBlocker()
     if not self:BankReady() then return "bank_closed" end
     if not self:ViewAll() then return "not_all_items" end
     return nil
 end
 
--- Copy bank stacks in View All order with their quantities
--- A displayed page uses the bank positions saved before Core moved any stacks
+-- Copy stacks in bank order, using positions saved before Core moved them.
 function PluginPages:BankItems(extension)
     if not self:IsLive(extension) then return nil, "stale" end
     local blockedReason = self:ItemsBlocker()
@@ -348,7 +329,7 @@ function PluginPages:BankItems(extension)
     local bankView = self.layout
     local entries = nil
     if bankView.shownPage ~= nil then
-        -- Wait for a fresh bank snapshot after an inventory change
+        -- Wait for fresh bank data.
         local pageState = bankView.pageState
         entries = pageState.active and not pageState.stale and pageState.bankItems or nil
     else
@@ -365,7 +346,6 @@ function PluginPages:BankItems(extension)
     return items
 end
 
--- Report the open bank window's screen bounds and grid columns, or nil
 function PluginPages:BankBounds(extension)
     if not self:IsLive(extension) or not self:BankReady() then return nil end
     local bankWindowMeasurements = self.layout:ReadBankWindowMeasurements()
@@ -375,7 +355,7 @@ function PluginPages:BankBounds(extension)
         columns = bankWindowMeasurements.columns }
 end
 
--- Read native controls even when no feature plugin is registered.
+-- Check bank controls even without registered plugins.
 function PluginPages:ReadBankState()
     local state = { bankOpen = self:BankReady(), viewAll = false, presetOpen = false,
         searchActive = false, filterActive = false }
@@ -391,15 +371,14 @@ function PluginPages:ReadBankState()
     return state
 end
 
--- Return a fresh snapshot of native bank controls without exposing components.
+-- Share control state without exposing the controls themselves.
 function PluginPages:BankState(extension)
     if not self:IsLive(extension) then return nil, "stale" end
     local state = self:ReadBankState()
     return state
 end
 
--- Run an extension's column or view callback, catching and always logging an error
--- Returns whether it finished and what it returned
+-- Run plugin drawing and log errors.
 function PluginPages:RunPluginCallback(extension, name, action, ...)
     if action == nil then return true end
     self.pluginCallbacks = self.pluginCallbacks + 1
@@ -411,15 +390,13 @@ function PluginPages:RunPluginCallback(extension, name, action, ...)
     return ok, result
 end
 
--- Tell every extension next tick that the bank Core attached to has closed
--- Called before the bank is restored; a second call for the same bank does nothing
+-- Queue one bank-close notification per opening.
 function PluginPages:BankClosed()
     if self.closed or not self.layout.active then return end
     for _, extension in pairs(self.owners) do extension.bankClosed = true end
     self:Notify()
 end
 
--- Schedule one notification pass for the next tick
 function PluginPages:Notify()
     if self.closed then return end
     Event.Logic.Subscribe(self.notifyEvent, function()
@@ -428,7 +405,7 @@ function PluginPages:Notify()
     end)
 end
 
--- Call one plugin without letting its error stop other callbacks
+-- A plugin's error must not stop other plugins.
 local function callExtensionCallback(extension, name, ...)
     local action = extension.callbacks[name]
     if action == nil then return end
@@ -436,7 +413,7 @@ local function callExtensionCallback(extension, name, ...)
     if not ok then debugLog("Bank Core extension ", extension.id, " ", name, " failed: ", message) end
 end
 
--- Compare all snapshot fields, including optional fields becoming absent.
+-- Include removed optional fields when comparing.
 local function sameBankState(first, second)
     if first == nil then return false end
     for key, value in pairs(first) do if second[key] ~= value then return false end end
@@ -444,22 +421,19 @@ local function sameBankState(first, second)
     return true
 end
 
--- Report whether the bank's items can be read now and are not waiting for a reread
 function PluginPages:ItemsReadable()
     return self:ItemsBlocker() == nil and not self.layout.pageState.stale
         and (self.layout.shownPage ~= nil or BankInterface.Find(BankInterface.ITEMS) ~= nil)
 end
 
--- Tell one extension what changed since it last heard: the bank closing, its page closing,
--- then its items
--- Disposing or replacing the extension ends the delivery
+-- Notify of bank closure, page closure, then item changes; stop if the plugin is removed.
 function PluginPages:DeliverTo(extension)
     if extension.bankClosed then
         extension.bankClosed = false
         callExtensionCallback(extension, "onBankClose")
         if not self:IsLive(extension) then return end
     end
-    -- Skip the close notification if the extension has already reopened its page
+    -- Do not report closure if the plugin reopened its page.
     local shown = self:ShownPage(extension) ~= nil
     if extension.shown and not shown then
         extension.shown = false
@@ -471,7 +445,7 @@ function PluginPages:DeliverTo(extension)
     if extension.callbacks.onBankStateChanged ~= nil then
         local state = self:BankState(extension)
         if not sameBankState(extension.heardState, state) then
-            -- Keep a separate copy so a callback cannot change its comparison baseline.
+            -- Keep a copy so plugin changes cannot affect later comparisons.
             extension.heardState = {}
             for key, value in pairs(state) do extension.heardState[key] = value end
             callExtensionCallback(extension, "onBankStateChanged", state)
@@ -487,7 +461,7 @@ function PluginPages:DeliverTo(extension)
     end
 end
 
--- Deliver changes to every live extension, ordered by ID
+-- Notify live plugins in ID order.
 function PluginPages:DeliverChanges()
     local extensionIDs = {}
     for extensionID in pairs(self.owners) do extensionIDs[#extensionIDs + 1] = extensionID end
@@ -499,9 +473,7 @@ function PluginPages:DeliverChanges()
     end
 end
 
--- Drop every extension at once, leave a shown page, and refuse all later calls
--- Clear the rail once so shutdown cannot mount another plugin's column
--- Extensions hear at once that their page and the bank closed
+-- Close all plugins and clear tabs before shutdown.
 function PluginPages:Close()
     if self.closed then return end
     local bankOpen = self.layout.active

@@ -1,5 +1,4 @@
--- Give a plugin's custom view its layers and attach bank items to the components it draws
--- Each drawing has its own context; drawing again or leaving the view revokes it
+-- Connect custom drawings to real bank items.
 
 local BankItemIndex = require("lib/bank/bank_item_index")
 local debugLog = require("lib/core/debug_log").Write
@@ -10,24 +9,22 @@ local UICoordinates = require("lib/ui/ui_coordinates")
 local CustomView = {}
 CustomView.__index = CustomView
 
--- Start one drawing's context in the layers Core made for it
--- actions.geometry describes the shown view; actions.release stops a binding's input at once
+-- Create a drawing context, valid until the view closes or redraws.
 function CustomView.new(parent, overlay, width, height, scrollY, actions)
     local self = setmetatable({
         parent = parent,
         width = width,
         height = height,
         actions = actions,
-        -- Bound components in binding order, and each component's binding
+        -- Bindings in drawing order, plus a lookup by component.
         bindings = {},
         byElement = {},
         bound = 0,
         nextID = 1,
         live = true,
-        -- Bindings changed since Core built the view's item input
+        -- Refresh item input when bindings change.
         changed = false,
     }, CustomView)
-    -- The plugin receives a plain table whose methods are its own fields
     self.context = {
         parent = parent,
         overlay = overlay,
@@ -41,8 +38,7 @@ function CustomView.new(parent, overlay, width, height, scrollY, actions)
     return self
 end
 
--- Check that a value is a component inside the view's parent
--- A component the client cannot read is not inside it
+-- Only accept readable components inside this view.
 function CustomView:Contains(element)
     local elementType = type(element)
     if (elementType ~= "userdata" and elementType ~= "table") or element == self.parent then return false end
@@ -50,14 +46,13 @@ function CustomView:Contains(element)
     return read and x ~= nil
 end
 
--- Give a binding's component back its own click-through when Core changed it
+-- Restore the component's original click-through setting.
 local function restoreClickthrough(binding)
     if binding.clickthrough == true then return end
     pcall(function() binding.element.clickthrough = binding.clickthrough end)
 end
 
--- Attach a component to an object's bank stack and return the binding's ID
--- Binding the component again keeps its ID; a new object releases the old stack first
+-- Rebinding keeps the ID; changing items releases the old stack.
 function CustomView:Bind(element, objectID)
     if not self.live then return nil, "stale" end
     local number = PlainData.ObjectNumber(objectID)
@@ -81,7 +76,7 @@ function CustomView:Bind(element, objectID)
     self.bindings[#self.bindings + 1] = binding
     self.byElement[element] = binding
     self.changed = true
-    -- Core takes the pointer in the bound area, so the component lets it through
+    -- Let clicks reach Core beneath the drawing.
     pcall(function()
         binding.clickthrough = element.clickthrough
         if binding.clickthrough ~= true then element.clickthrough = true end
@@ -89,7 +84,7 @@ function CustomView:Bind(element, objectID)
     return binding.id
 end
 
--- Stop a binding's input now; Core rebuilds the view's item input on the next tick
+-- Stop clicks immediately; rebuild input next tick.
 function CustomView:Release(binding)
     local entry = binding.entry
     binding.entry = nil
@@ -98,7 +93,6 @@ function CustomView:Release(binding)
     self.actions.release(binding)
 end
 
--- Detach a component; doing so again, or for a component never bound, does nothing
 function CustomView:Unbind(element)
     if not self.live then return false, "stale" end
     local binding = self.byElement[element]
@@ -111,13 +105,12 @@ function CustomView:Unbind(element)
     return true
 end
 
--- Describe the shown view in a fresh table
 function CustomView:Geometry()
     if not self.live then return nil, "stale" end
     return self.actions.geometry()
 end
 
--- End the context: its calls are stale and live components keep their own click-through
+-- Disable old drawing calls and restore click-through settings.
 function CustomView:Revoke()
     if not self.live then return end
     self.live = false
@@ -127,8 +120,7 @@ function CustomView:Revoke()
     self.bindings, self.byElement = {}, {}
 end
 
--- Describe the active bindings as page slots in binding order
--- Repeats of an object are numbered as a page's repeated slots are, so they match stacks alike
+-- Match repeated items to stacks in the same order as grid pages.
 function CustomView:Place(height)
     local bindings, slots, members, occurrences = {}, {}, {}, {}
     for _, binding in ipairs(self.bindings) do
@@ -147,7 +139,7 @@ function CustomView:Place(height)
     return { slots = slots, headings = {}, members = members, height = height }
 end
 
--- Find the lowest bottom edge of the bound components, as their containers show them
+-- Find the lowest visible edge of bound items.
 function CustomView:BoundBottom()
     local bottom = 0
     for _, binding in ipairs(self.bindings) do
@@ -157,9 +149,7 @@ function CustomView:BoundBottom()
     return bottom
 end
 
--- Measure where an entry takes input: the part of its component the view's content shows
--- A component the client cannot read, or no longer inside the view, as after it or a
--- container is destroyed, is unbound; a hidden or clipped one keeps its binding
+-- Keep hidden items bound; unbind destroyed or removed components.
 local function measure(self, entry, rootWidth, rootHeight)
     local binding = entry.binding
     if not binding.active or binding.objectID ~= entry.objectID then return false end
@@ -187,7 +177,6 @@ local function measure(self, entry, rootWidth, rootHeight)
     return true
 end
 
--- Attach the view's entries to their bindings and measure them
 function CustomView:Measure(entries)
     local rootWidth, rootHeight = self.parent.width, self.parent.height
     for _, entry in ipairs(entries) do
@@ -198,7 +187,7 @@ function CustomView:Measure(entries)
     end
 end
 
--- Measure the bound components again, reporting whether any input area changed
+-- Recheck item positions and report changed click areas.
 function CustomView:Follow()
     local rootWidth, rootHeight = self.parent.width, self.parent.height
     local changed = false

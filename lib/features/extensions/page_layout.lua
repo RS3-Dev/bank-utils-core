@@ -10,17 +10,15 @@ local ROW_FIELDS = { label = true, slots = true }
 local GRID_LEFT = BankGrid.LEFT
 local GRID_TOP = BankGrid.TOP
 local GRID_STEP = BankGrid.STEP
--- Reserve this height for the page title
 PageLayout.HEADING_HEIGHT = 28
--- Offset section labels below the preceding item row
 local LABEL_TOP = 3
 local LABEL_HEIGHT = PageLayout.HEADING_HEIGHT + LABEL_TOP
--- Labels, rows, and slots on one page, counted together
+-- Count labels, rows, and slots toward one limit.
 PageLayout.MAX_ENTRIES = 10000
--- The tallest content a page or custom view may have: a row step for every entry
+-- Allow one row of height per entry.
 PageLayout.MAX_HEIGHT = PageLayout.MAX_ENTRIES * GRID_STEP
 
--- Read one slot: false for a blank, or an object ID
+-- A slot is an item ID or false for a blank.
 local function readSlot(description)
     if description == false then return { kind = "blank" } end
     if type(description) == "table" then
@@ -35,7 +33,6 @@ local function readSlot(description)
     return { kind = "item", objectID = objectID }
 end
 
--- Read a page's layout rows, counting entries toward the limit
 function PageLayout.ReadRows(description, textLength)
     if type(description) ~= "table" then return nil, "rows must be a list" end
     local remainingEntries = PageLayout.MAX_ENTRIES
@@ -81,15 +78,11 @@ function PageLayout.ReadRows(description, textLength)
     return rows
 end
 
--- Place the layout's rows; a label takes one line and rows wrap as needed
--- Lines and columns are a grid step apart
--- Repeated item IDs number their copies; slot positions count blanks
--- Labels do not count as item slots
+-- Wrap rows; count blank slots and repeated items, but skip labels in slot numbering.
 local function placeRows(placedPage, rows, top, columnCount)
     local rowOffsetY, slotPosition, itemCounts = 0, 0, {}
     for _, row in ipairs(rows) do
         if row.kind == "label" then
-            -- Keep the label close to the items above it
             placedPage.headings[#placedPage.headings + 1] = {
                 label = row.text,
                 y = top + GRID_TOP + rowOffsetY + LABEL_TOP,
@@ -123,9 +116,7 @@ local function placeRows(placedPage, rows, top, columnCount)
     return rowOffsetY > 0 and GRID_TOP + rowOffsetY or 0
 end
 
--- Place a page's title and layout rows at a column count
--- Return item positions, headings, slot lookups and the total page height
--- An emptied page, whose extension has gone, has no title and draws nothing
+-- Build item positions and headings; removed pages draw nothing.
 function PageLayout.Place(record, columnCount)
     local placedPage = { slots = {}, headings = {}, members = {}, height = 0 }
     local y = 0

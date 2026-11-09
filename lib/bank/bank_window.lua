@@ -7,7 +7,7 @@ local UICoordinates = require("lib/ui/ui_coordinates")
 local DebugLog = require("lib/core/debug_log")
 local debugLog = DebugLog.Write
 
--- Report a window failure to the host log even with debug output off
+-- Always log window failures.
 local function report(...)
     if type(log) == "function" then log(...) end
 end
@@ -36,15 +36,14 @@ local CANCEL_LABEL_DYNAMIC_ID = 9
 local PRESET_CLOSE_BUTTON_STATIC_ID = 86 -- BANK__PRESET_CLOSE
 local ALL_TAB_SELECTED_SPRITE_ID = 8070 -- BANK_TABS_HORIZONTAL_1
 local ALL_TAB_UNSELECTED_SPRITE_ID = 8069 -- BANK_TABS_HORIZONTAL_0
--- Check for window moves and resizes; the client has no event for either
+-- The game has no window move or resize events.
 local BANK_WINDOW_CHECK_TICKS = 10
 
--- Round half a width down so expansion stays aligned to whole pixels
+-- Round down to keep expansion on whole pixels.
 local function halfWidth(value)
     return math.floor(value / 2)
 end
 
--- Find a native bank component by its interface slot
 local component = BankInterface.Get
 
 -- Find a native child that may disappear between views
@@ -62,12 +61,11 @@ end
 
 local MAX_PARENT_DEPTH = 32
 
--- Compare host components, whose handles may not compare equal
+-- Handles for the same component may compare unequal.
 local function samePart(firstComponent, secondComponent)
     return firstComponent ~= nil and secondComponent ~= nil and (firstComponent == secondComponent or tostring(firstComponent) == tostring(secondComponent))
 end
 
--- Read a part's position, size and attachment rules
 local function readPartLayout(value)
     local position, size = value.position, value.size
     return {
@@ -79,7 +77,7 @@ local function readPartLayout(value)
     }
 end
 
--- Add to a part's horizontal offset and width offset, keeping every anchor
+-- Adjust position and width without changing anchors.
 local function offsetPart(value, x, width)
     local partLayout = readPartLayout(value)
     if width ~= 0 then
@@ -90,22 +88,19 @@ local function offsetPart(value, x, width)
     end
 end
 
--- Round an offset to whole interface units
 local function round(value)
     return math.floor(value + 0.5)
 end
 
--- Plan how far each part moves and widens when the window widens
--- Content and right-edge controls follow the right edge; dialogs stay centred
+-- Widen the bank, keeping right-edge controls aligned and dialogs centred.
 local function expansionChanges(parts, width)
     local expansionPlan, halfAddedWidth = {}, halfWidth(width)
-    -- Add a part that may be missing
     local function add(slot, value, x, change)
         if value ~= nil then
             expansionPlan[#expansionPlan + 1] = { slot = slot, value = value, x = x, width = change }
         end
     end
-    -- A separate host frame carries the move; otherwise the window layer does
+    -- Move the host frame when present; otherwise move the window layer.
     if parts.host ~= nil and not samePart(parts.host, parts.all) then
         add("host", parts.host, -halfAddedWidth, width)
         add("all", parts.all, 0, width)
@@ -122,7 +117,7 @@ local function expansionChanges(parts, width)
     return expansionPlan
 end
 
--- Find how much a component widens, from its own plan or its parent's
+-- Include width inherited from the parent.
 local function widthChange(value, expansionPlan, depth)
     if value == nil or depth > MAX_PARENT_DEPTH then return 0 end
     for _, change in ipairs(expansionPlan) do
@@ -133,7 +128,7 @@ local function widthChange(value, expansionPlan, depth)
     return parentWidthRatio * widthChange(value.parent, expansionPlan, depth + 1)
 end
 
--- Add only the width and movement not already supplied by parent-relative sizing
+-- Avoid adding width already inherited from the parent.
 local function expandWindow(parts, width)
     local expansionPlan = expansionChanges(parts, width)
     local appliedOffsets = {}
@@ -151,8 +146,7 @@ local function expandWindow(parts, width)
     return appliedOffsets
 end
 
--- Take the added offsets back off, keeping any resize made while expanded
--- A part the host removed may refuse; return whether every undo worked
+-- Undo Core's offsets while preserving the player's resizing.
 local function undoExpansion(appliedOffsets)
     local allPartsRestored = true
     for _, entry in ipairs(appliedOffsets) do
@@ -165,7 +159,6 @@ local function undoExpansion(appliedOffsets)
     return allPartsRestored
 end
 
--- Find a part by the slot name the expansion record uses
 local function findPartByName(parts, slot)
     local overlay = string.match(slot, "^overlay(.+)$")
     if overlay ~= nil then return parts.overlays[tonumber(overlay) or overlay] end
@@ -174,7 +167,7 @@ local function findPartByName(parts, slot)
     return parts[slot]
 end
 
--- Find the recorded window frame: the host when expansion moved it, else the window layer
+-- Use the frame that received the saved expansion.
 local function findFrameRecord(record)
     local layer = nil
     for _, entry in ipairs(record.parts) do
@@ -184,7 +177,7 @@ local function findFrameRecord(record)
     return layer
 end
 
--- Look up the window frame again in case the host replaced its handle
+-- Look up a fresh frame in case its handle changed.
 local function findCurrentFrame(slot)
     local ok, value = pcall(function()
         if slot == "host" then
@@ -195,16 +188,14 @@ local function findCurrentFrame(slot)
     return ok and value or nil
 end
 
--- Read a part's horizontal offsets, or nil when its handle no longer answers
+-- Old handles may no longer respond.
 local function tryReadPartLayout(value)
     local ok, partLayout = pcall(readPartLayout, value)
     if not ok or type(partLayout.x) ~= "number" or type(partLayout.width) ~= "number" then return nil end
     return partLayout
 end
 
--- Undo a recorded expansion the client kept or put back, part by part
--- Only parts still at their widened offsets change; each undo is read back to check it
--- Returns false until every undo works, so a later attach retries the rest
+-- Undo only the saved expansion still present; retry failures on the next attach.
 function BankWindow.RecoverExpansion(parts, record)
     if record == nil then return true end
     local frame = findFrameRecord(record)
@@ -246,7 +237,6 @@ function BankWindow.RecoverExpansion(parts, record)
     return true
 end
 
--- Log component offsets, parent-relative sizing and screen positions
 function BankWindow:LogBankWindowMeasurements(reason)
     if not DebugLog.IsEnabled() then return end
     local parts = self.components
@@ -268,7 +258,7 @@ function BankWindow:LogBankWindowMeasurements(reason)
             local anchorDetails = string.format("pos %s,%s parent %s,%s self %s,%s size %sx%s parent %s,%s",
                 partLayout.x, partLayout.y, partLayout.xParent, partLayout.yParent, partLayout.xSelf, partLayout.ySelf,
                 partLayout.width, partLayout.height, partLayout.widthParent, partLayout.heightParent)
-            -- Compare both coordinate sources during live scaling and scrolling checks
+            -- Compare both position sources during scaling and scrolling.
             local x, y = UICoordinates.absolutePosition(value)
             local global = value.xyGlobal
             return string.format("%s,%s %sx%s; %s; screen %s,%s API %s,%s",
@@ -278,7 +268,6 @@ function BankWindow:LogBankWindowMeasurements(reason)
     end
 end
 
--- Rebuild item buttons for the displayed page
 function BankWindow:RebuildPageInput()
     self.itemHover:RemovePageInput()
     if self.shownPage ~= nil then self.itemHover:BuildPageInput() end
@@ -298,8 +287,7 @@ function BankWindow:CaptureFrame()
     entry.expandedX, entry.expandedWidth = partLayout.x, partLayout.width
 end
 
--- Find the bank window's parts, keyed by the slots the expansion record uses
--- The top-level frame is in its own interface; without the bank's, its parts are missing
+-- Find window parts by their saved slot names.
 local function lookUpParts()
     local parts = {
         host = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__BANK_WINDOW),
@@ -318,15 +306,12 @@ local function lookUpParts()
     return parts
 end
 
--- Read the window frame through a fresh lookup
 local function frameOffsets(entry)
     local frame = findCurrentFrame(entry.slot)
     return frame ~= nil and tryReadPartLayout(frame) or nil
 end
 
--- Remove Core's added width and movement
--- Keep size changes the player made while the sidebar was open
--- Keep the record in case the client brings back the wider size
+-- Undo sidebar expansion, keeping player resizes and the recovery record.
 function BankWindow:RestoreBankWindowSizeAndPosition()
     BankWindow.CaptureFrame(self)
     local allPartsRestored = undoExpansion(self.expansion or {})
@@ -335,13 +320,13 @@ function BankWindow:RestoreBankWindowSizeAndPosition()
     if record == nil then return end
     local entry = findFrameRecord(record)
     local partLayout = frameOffsets(entry)
-    -- A handle held since attach may be replaced; undo what still shows on fresh ones
+    -- Use fresh handles to undo any remaining expansion.
     if partLayout ~= nil and partLayout.width == entry.expandedWidth then
         local ok, message = pcall(function()
             allPartsRestored = BankWindow.RecoverExpansion(lookUpParts(), record)
         end)
         if not ok then debugLog("Bank Core could not look up the bank's parts: ", message) end
-        -- A later attach decides again from the offsets it finds
+        -- Check offsets again on the next attach.
         for _, part in ipairs(record.parts) do part.restored = nil end
         partLayout = frameOffsets(entry)
     end
@@ -365,16 +350,15 @@ function BankWindow:WidenBankForSidebar()
     self.windowRecord.value = record
 end
 
--- Read the bank window bounds and item columns
 function BankWindow:ReadBankWindowMeasurements()
     if not self.active then return nil end
     local frame = self.components.host or self.components.all
-    -- The watch reads this every few ticks, so a missing part must not cause an error
+    -- Window parts may disappear between checks.
     local itemLayer = BankInterface.Find(BANK_ITEMS_STATIC_ID)
     local itemWidth = itemLayer ~= nil and itemLayer.width or 0
     if frame == nil or itemWidth <= 0 then return nil end
     local x, y = UICoordinates.absolutePosition(frame)
-    -- A shown page reports the columns its rows are laid out at
+    -- Use the column count of the displayed layout.
     local columns = self.shownPage ~= nil and self.pageState.columns
         or BankGrid.ColumnCount(itemWidth)
     return {
@@ -384,20 +368,16 @@ function BankWindow:ReadBankWindowMeasurements()
     }
 end
 
--- Summarize window measurements to detect changes
 local function describeBankWindowMeasurements(bankWindowMeasurements)
     if bankWindowMeasurements == nil then return "closed" end
     local bounds = bankWindowMeasurements.bounds
     return table.concat({ bankWindowMeasurements.columns, bounds.x, bounds.y, bounds.width, bounds.height }, " ")
 end
 
--- Follow bank moves and resizes, and fit the sidebar
 function BankWindow:WatchBankWindow()
-    -- Native panels can change without a menu or inventory event, even while no
-    -- plugin page is shown. Subscribers compare snapshots before notifying plugins.
+    -- Bank panels can change without events, even when no plugin page is open.
     self.onChange()
     if self.expanded then
-        -- A missing part must not cause an error here either
         local content = BankInterface.Find(STATIC.content)
         local height = content ~= nil and content.height or 0
         if height > 0 then self:ResizeSidebar(height) end
@@ -405,16 +385,15 @@ function BankWindow:WatchBankWindow()
     local signature = describeBankWindowMeasurements(self:ReadBankWindowMeasurements())
     if signature == self.lastBankWindowMeasurements then return end
     self.lastBankWindowMeasurements = signature
-    -- Kept in memory; saved when the bank closes or Core stops
+    -- Save to disk on bank close or shutdown.
     if self.expanded then self:CaptureFrame() end
     self:LogBankWindowMeasurements("changed")
 end
 
--- Start checking the bank window every few ticks
 function BankWindow:StartBankWindowWatch()
     self:StopBankWindowWatch()
     self.windowSession = self.windowSession + 1
-    -- Each open watches under its own name so reopened banks never share one
+    -- Give each bank opening its own listener.
     self.bankWindowWatch = Config.CORE_REF .. "_bank_window_watch:"
         .. string.match(tostring(self), "%x+$") .. ":" .. self.windowSession
     local ticks = 0
@@ -426,7 +405,6 @@ function BankWindow:StartBankWindowWatch()
     end)
 end
 
--- Stop checking the bank window
 function BankWindow:StopBankWindowWatch()
     if self.bankWindowWatch == nil then return end
     self.windowSession = self.windowSession + 1
@@ -434,7 +412,7 @@ function BankWindow:StopBankWindowWatch()
     self.bankWindowWatch = nil
 end
 
--- Wait until the bank's required components have usable sizes and are visible
+-- Wait for visible bank parts with usable sizes.
 function BankWindow:IsReady()
     if self.active then return true end
     local bank = ui.Interfaces:GetInterface(Config.BANK_INTERFACE_ID)
@@ -467,11 +445,10 @@ function BankWindow:Apply()
     if self.active then return true end
     if not self:IsReady() then return false end
 
-    -- IsReady found every required part
     self.components = lookUpParts()
     local all = self.components.all
 
-    -- Restore any leftover expansion before adding the sidebar width again
+    -- Undo leftover expansion before adding sidebar space.
     if not BankWindow.RecoverExpansion(self.components, self.windowRecord.value) then
         self.components = {}
         self.windowRecord:Save()
@@ -482,7 +459,7 @@ function BankWindow:Apply()
     self.active = true
     self.nativeViewAll = self:DetectNativeViewAll() == true
     self:WidenBankForSidebar()
-    -- Saved first so a crash or failed shutdown can be recovered
+    -- Save first so a crash can be recovered.
     self.windowRecord:Save()
     self:CreateSidebar(all, self.components.content.height)
     self.expanded = true
@@ -492,7 +469,7 @@ function BankWindow:Apply()
     return true
 end
 
--- Native controls can remain allocated while hidden, or disappear during a rebuild.
+-- Hidden controls may still exist; rebuilds may remove them.
 local function controlIsVisible(staticID)
     local ok, visible = pcall(function()
         local control = component(staticID)
@@ -502,7 +479,7 @@ local function controlIsVisible(staticID)
     return ok and visible == true
 end
 
--- Search and native filters use the same text child, confirmed in the live client.
+-- Search and filters share the same text control.
 function BankWindow:ReadNativeFilterMode()
     if not controlIsVisible(CANCEL_CONTROL_STATIC_ID) then return nil end
     local label = dynamicComponent(CANCEL_CONTROL_STATIC_ID, CANCEL_LABEL_CATEGORY_ID, CANCEL_LABEL_DYNAMIC_ID)
@@ -519,24 +496,23 @@ function BankWindow:ReadNativeFilterMode()
     return nil, text:sub(1, 80)
 end
 
--- Read the shared control's label rather than treating its presence as search.
+-- Check the label to distinguish search from filters.
 function BankWindow:IsSearchActive()
     return self:ReadNativeFilterMode() == "search"
 end
 
--- The native filter cancel control is shown while the bank's own filters apply.
+-- A visible cancel button means bank filters are active.
 function BankWindow:IsFilterActive()
     return self:ReadNativeFilterMode() == "filter"
 end
 
--- The preset close button is shown while the native preset selector is open.
+-- A visible close button means the preset selector is open.
 function BankWindow:IsPresetViewOpen()
     return controlIsVisible(PRESET_CLOSE_BUTTON_STATIC_ID)
 end
 
--- Read the native All Items tab state
 function BankWindow:DetectNativeViewAll()
-    -- The button's first dynamic child is its selected/unselected background.
+    -- The first child shows whether the tab is selected.
     local tabBackground = dynamicComponent(
         ALL_TAB_BUTTON_STATIC_ID,
         ALL_TAB_BUTTON_CATEGORY_ID,
@@ -550,11 +526,10 @@ function BankWindow:DetectNativeViewAll()
     return nil
 end
 
--- Leave the bank, remove plugin controls, and restore the native window
--- A failed step's error is raised only after the window is restored and saved
+-- Restore and save the window before reporting cleanup errors.
 function BankWindow:Restore()
     local failure = nil
-    -- Run one teardown step, keeping the first failure
+    -- Continue cleanup after errors, keeping the first failure.
     local function step(action)
         local ok, message = pcall(action)
         if not ok then
@@ -576,7 +551,6 @@ function BankWindow:Restore()
     if failure ~= nil then error(failure, 0) end
 end
 
--- Add these window methods to the BankView class
 function BankWindow.install(target)
     for name, method in pairs(BankWindow) do
         if name ~= "install" then target[name] = method end

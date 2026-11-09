@@ -1,5 +1,4 @@
--- Prevent clicks on plugin content from triggering the game's bank actions.
--- Match menu entries to the actual bank items moved under the mouse.
+-- Keep bank menu actions aimed at the right item.
 
 local BankInterface = require("lib/core/bank_interface")
 local BankItemIndex = require("lib/bank/bank_item_index")
@@ -11,25 +10,22 @@ local debugLog = DebugLog.Write
 local MiniMenuRouter = {}
 MiniMenuRouter.__index = MiniMenuRouter
 
--- Create a menu handler for one bank session.
 function MiniMenuRouter.new(session, options)
     return setmetatable({
         session = session,
         options = options,
-        -- Reuse the game's item list until the bank items change.
+        -- Reuse bank data until items change.
         nativeIndex = nil,
     }, MiniMenuRouter)
 end
 
--- Check whether a menu entry refers to this game control.
 local function sameComponent(component, menuItem)
     return component ~= nil
         and component.categoryID == menuItem.categoryID
         and component.dynamicID == menuItem.dynamicID
 end
 
--- Find the bank item stack named in a menu entry.
--- Rebuild the saved item list only when the bank items change.
+-- Reuse the item lookup until bank items change.
 function MiniMenuRouter:NativeEntry(menuItem)
     local bankView = self.session.layout
     local bankSnapshot = self.nativeIndex
@@ -47,7 +43,6 @@ function MiniMenuRouter:NativeEntry(menuItem)
     return nil
 end
 
--- Find the displayed plugin page slot under the mouse.
 function MiniMenuRouter:PageSlotAtPointer()
     local bankView = self.session.layout
     local inputBlocker = bankView.itemHover.pageInputBlocker
@@ -60,8 +55,7 @@ function MiniMenuRouter:PageSlotAtPointer()
     return bankView.pageDisplay:EntryAtPosition(bankView.itemHover.drawnPageItems, pageArea, localX, localY)
 end
 
--- Find the slot for the hovered bank stack, or use the mouse if no menu item exists.
--- Return both the slot details and the item displayed there.
+-- Find the hovered slot, falling back to the mouse position.
 function MiniMenuRouter:PageMenuSlot(menuItem)
     local bankView = self.session.layout
     local hoveredStack = bankView.itemHover.hoveredBankStack
@@ -79,8 +73,7 @@ function MiniMenuRouter:PageMenuSlot(menuItem)
     return bankView.pageState:Slot(entry.layoutKey), entry
 end
 
--- Return a new table of menu item details for a plugin.
--- Include the slot position only on that plugin's displayed page, with no redraw pending.
+-- Include page slot details only when that plugin's page is up to date.
 function MiniMenuRouter:Describe(owner, menu)
     local pluginPages, bankView = self.session.pluginPages, self.session.layout
     local menuType = type(menu)
@@ -100,19 +93,17 @@ function MiniMenuRouter:Describe(owner, menu)
         item = { objectID = slot.objectID }
         if pluginPages:ShownPage(owner) ~= nil and not owner.redrawPending then item.slot = slot.position end
     end
-    -- Say whether the game's actions can reach the item; keep its control private.
+    -- Share whether bank actions are available, keeping controls private.
     item.interactive = menuItem ~= nil and self:HasNativeInput(menuItem)
     return item
 end
 
--- Check whether a plugin supplies the default left-click action.
 local function hasPluginDefaultAction(menu)
     local top = menu.entries[menu.entryCount]
     return top ~= nil and top.actionEntryType == MiniMenuEntryType.PLUGIN
 end
 
--- Check whether the game's bank actions can reach this item stack.
--- Block stacks moved off-screen and items covered by a plugin's sidebar.
+-- Block bank actions on hidden or sidebar-covered stacks.
 function MiniMenuRouter:HasNativeInput(menuItem)
     local bankView = self.session.layout
     if not self.session.inGame or not self.options.bankIsOpen()
@@ -121,15 +112,14 @@ function MiniMenuRouter:HasNativeInput(menuItem)
         or bankView.itemHover:IsBankStackMovedAside(menuItem.id, menuItem.categoryID,
             menuItem.dynamicID) then return false end
     if bankView.shownPage ~= nil then
-        -- The matched stack is under the mouse; its placeholder flag tracks if it is empty.
+        -- The hovered stack's placeholder flag shows whether it is empty.
         return self:PageMenuSlot(menuItem) ~= nil and bankView.itemHover.hoveredBankStack.placeholder ~= true
     end
     local entry = self:NativeEntry(menuItem)
     return entry ~= nil and (entry.quantity or 0) > 0
 end
 
--- Make Cancel the default to prevent clicks on moved items or plugin content.
--- Keep plugin actions in their sidebar or custom view, where they may draw controls.
+-- Default to Cancel so clicks cannot act on hidden bank items.
 function MiniMenuRouter:ProtectDefault(menu)
     local bankView = self.session.layout
     if bankView == nil or not bankView.active then return end
@@ -150,7 +140,6 @@ function MiniMenuRouter:ProtectDefault(menu)
     end
 end
 
--- Apply click protection to a bank menu.
 function MiniMenuRouter:HandleMenu(event)
     if not self.session.inGame then return end
     if not self.options.bankIsOpen() then return end

@@ -8,8 +8,7 @@ local BankControls = {}
 local NativeButton = {}
 NativeButton.__index = NativeButton
 
--- Build a native-style button with decorative children and one action
--- Without an action, the caller handles the button's input itself
+-- Create a bank-style button with an optional click action.
 function BankControls.button(parent, content, action, options)
     local self = setmetatable({
         action = action,
@@ -32,7 +31,7 @@ function BankControls.button(parent, content, action, options)
         end)
     end
 
-    -- Hovering also measures the pointer's scale, so a press here needs no earlier hover elsewhere
+    -- Measure pointer scale on hover so clicks work immediately.
     UICoordinates.trackPointer(self.root)
     self.root:Subscribe(ui.Hook.ONMOUSEOVER, function(component, hoverX, hoverY)
         UICoordinates.calibratePointer(component, hoverX, hoverY)
@@ -46,9 +45,9 @@ function BankControls.button(parent, content, action, options)
         return true
     end)
 
-    -- ui.Button cannot hold children, so its decorations sit beside it and let clicks through
+    -- Buttons cannot hold children, so decorations sit beside them.
     if self.spriteName ~= nil or self.spriteID ~= nil then
-        -- A plain sprite uses the same picture for every button state.
+        -- Use one sprite for every button state.
         self.sprites = self.spriteID ~= nil and { neutral = self.spriteID }
             or prettyui.Sprites.SPRITE_BUTTONS[self.spriteName]
         if self.sprites == nil then
@@ -68,7 +67,6 @@ function BankControls.button(parent, content, action, options)
     return self
 end
 
--- Refresh the button's input, label, icon, and selection look
 function NativeButton:_UpdateState()
     if self.root == nil then return end
     self.root.enabled = not self.disabled
@@ -86,7 +84,7 @@ function NativeButton:_UpdateState()
     end
 end
 
--- Stop the hover look, tooltip and pointer measuring, as when the button changes shape
+-- Clear hover state when the button changes shape.
 function NativeButton:StopHover()
     prettyui.Tooltip.unbind(self)
     self.root:Unsubscribe(ui.Hook.ONMOUSEOVER)
@@ -94,7 +92,6 @@ function NativeButton:StopHover()
     UICoordinates.untrackPointer(self.root)
 end
 
--- Remove the tooltip and destroy the button and its decorations
 function NativeButton:Destroy()
     prettyui.Tooltip.unbind(self)
     if self.icon ~= nil then self.icon:Destroy() end
@@ -103,7 +100,7 @@ function NativeButton:Destroy()
     self.icon = nil
 end
 
--- Draw a one-pixel frame that lets clicks through
+-- Draw a thin frame that lets clicks through.
 function BankControls.frame(parent, rgba)
     local frame = ui.Rectangle.new(parent)
     frame.fill = false

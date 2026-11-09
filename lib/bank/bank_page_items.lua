@@ -14,10 +14,8 @@ local DEFAULT_ITEM_SIZE = 32
 local PLACEHOLDER_ALPHA = 0.45
 local PLACEHOLDER_QUANTITY_MODE = ui.ObjectQuantityDisplayMode.ALWAYS
 
--- Find a native bank component by its interface slot
 local component = BankInterface.Get
 
--- Record bank items and measure their display sizes
 function BankPageItems.new()
     local self = setmetatable({}, BankPageItems)
     self:Restore()
@@ -28,10 +26,9 @@ end
 function BankPageItems:Restore()
     self.active = false
     self.bankItems = {}
-    -- The client reported an inventory change since this snapshot was read
+    -- Bank items changed since this read.
     self.stale = false
     self.view = nil
-    -- The grid columns the page was laid out at
     self.columns = nil
     self.itemWidth = DEFAULT_ITEM_SIZE
     self.itemHeight = DEFAULT_ITEM_SIZE
@@ -39,18 +36,17 @@ function BankPageItems:Restore()
     self.placeholderHeight = DEFAULT_ITEM_SIZE
     self.placeholderOutlineWidth = nil
     self.placeholderShadowRGBA = nil
-    -- Repeated items whose copies share one bank stack, read with each layout or bank read
+    -- Repeated items that share one bank stack.
     self.sharedStacks = {}
 end
 
--- Check whether a shown page's recorded bank items still match the bank
 function BankPageItems:IsInSync()
     if not self.active then return false end
 
     local bankItemLayer = component(BANK_ITEMS_STATIC_ID)
     if bankItemLayer == nil then return false end
 
-    -- Compare native slot IDs directly; sorting is unnecessary for this check
+    -- Compare slots directly without sorting.
     local stacksBySlot = {}
     for _, bankItemSnapshot in ipairs(BankItemIndex.Read(bankItemLayer)) do
         stacksBySlot[bankItemSnapshot.instanceKey] = { objectID = bankItemSnapshot.objectID, quantity = bankItemSnapshot.quantity }
@@ -70,7 +66,6 @@ function BankPageItems:IsInSync()
     return snapshotCount > 0
 end
 
--- Return the opacity and quantity mode used for absent items
 function BankPageItems:GetPlaceholderStyle()
     return {
         alpha = PLACEHOLDER_ALPHA,
@@ -78,19 +73,16 @@ function BankPageItems:GetPlaceholderStyle()
     }
 end
 
--- Return the headings and labels of the current page
 function BankPageItems:GetLayoutSections()
     return self.view ~= nil and self.view.headings or {}
 end
 
--- Check whether the recorded stack has zero quantity
--- Unknown quantities join stocked stacks here; input still waits for a readable quantity
+-- Unknown quantities count as stocked, but cannot receive input yet.
 local function isPlaceholder(bankItem)
     return bankItem.quantity ~= nil and bankItem.quantity <= 0
 end
 
--- Group stacks by item ID, with stocked stacks before placeholders
--- Keep All Items order within each group
+-- Group by item ID, stocked first, preserving bank order.
 local function groupStacksByObject(bankItems)
     local stockedStacksByObject, placeholdersByObject = {}, {}
     for _, bankItem in ipairs(bankItems) do
@@ -110,9 +102,7 @@ local function groupStacksByObject(bankItems)
     return stockedStacksByObject
 end
 
--- Match a page slot to its bank stack
--- Every copy of an item that stacks in the bank shows its first stack;
--- copies of other items take successive stacks
+-- Shared stacks serve every copy; other items use separate stacks.
 local function stackForSlot(stacksByObject, sharedStacks, slot)
     local objectStacks = stacksByObject[slot.objectID]
     if objectStacks == nil then return nil end
@@ -120,14 +110,13 @@ local function stackForSlot(stacksByObject, sharedStacks, slot)
         for _, stack in ipairs(objectStacks) do
             if stack.bankSlot == slot.bankSlot then return stack end
         end
-        -- Never substitute a different copy when a filtered page names one native stack.
+        -- Filtered pages must keep the exact stack they requested.
         return nil
     end
     return objectStacks[sharedStacks[slot.objectID] and 1 or slot.occurrence]
 end
 
--- Read once for each item the page repeats whether its copies share one bank stack
--- An item shown once needs no answer; an unreadable one keeps successive stacks
+-- Check once per repeated item whether its copies share a stack.
 local function readSharedStacks(view)
     local sharedStacks = {}
     for _, slot in ipairs(view.slots) do
@@ -138,13 +127,10 @@ local function readSharedStacks(view)
     return sharedStacks
 end
 
--- Describe the page image and the real stack beneath it
--- A missing stack produces only an image, without native input
--- area is where the item takes input in the page's content: a grid slot's cell, or for a
--- custom view's binding the part of its component shown, measured once it is placed
+-- Pair each page image with its bank stack and visible click area.
 local function pageItem(self, slot, quantity, bankItem, insetX, insetY)
     local placeholder = quantity ~= nil and quantity <= 0
-    -- Zero-quantity stacks use placeholder styling; stocked stacks use their native appearance
+    -- Empty stacks use placeholder styling.
     local nativeComponent = not placeholder and bankItem ~= nil and bankItem.component or nil
     return {
         objectID = slot.objectID,
@@ -169,15 +155,14 @@ local function pageItem(self, slot, quantity, bankItem, insetX, insetY)
     }
 end
 
--- Build one page item per slot, in layout order; the native view has none
--- A grid slot's cell reaches insetX and insetY beyond its picture
+-- Build page items in layout order; click areas include the image insets.
 function BankPageItems:GetVisibleItems(insetX, insetY)
     local items = {}
     if self.view == nil then return items end
     local stacksByObject = groupStacksByObject(self.bankItems)
     for _, slot in ipairs(self.view.slots) do
         local bankItem = stackForSlot(stacksByObject, self.sharedStacks, slot)
-        -- A stack with no published quantity is drawn as it is; a ghost shows none held
+        -- Keep unknown quantities as shown; missing stacks show none held.
         local quantity = 0
         if bankItem ~= nil then quantity = bankItem.component.associatedObjectQuantity end
         items[#items + 1] = pageItem(self, slot, quantity, bankItem, insetX, insetY)
@@ -185,14 +170,11 @@ function BankPageItems:GetVisibleItems(insetX, insetY)
     return items
 end
 
--- Find a page slot by item ID and repeat number
 function BankPageItems:Slot(layoutKey)
     return self.view ~= nil and self.view.members[layoutKey] or nil
 end
 
--- Check whether changed quantities assign a slot a different bank stack
--- Stacks keep the order they were read in; a stack added, removed, or replaced counts as a change
--- Reuse a fresh bank snapshot when the caller already has one
+-- Check whether bank changes assigned a different stack to any slot.
 function BankPageItems:StacksReassigned(freshBankItems)
     if self.view == nil then return false end
     if freshBankItems == nil then
@@ -222,7 +204,7 @@ function BankPageItems:StacksReassigned(freshBankItems)
     return false
 end
 
--- Measure native item size and keep the current placeholder look
+-- Read item sizes and placeholder styling.
 local function captureDisplayMetrics(self, items)
     local sampleComponent = items[1] and items[1].component or nil
     local itemWidth = sampleComponent ~= nil and sampleComponent.width or nil
@@ -261,14 +243,13 @@ function BankPageItems:RefreshBankItems()
     local items = BankItemIndex.Collect(bankItemLayer)
     self.bankItems = items
     self.stale = false
-    -- A stack type the client could not read before may be readable now
+    -- Previously unreadable item types may be available now.
     self.sharedStacks = readSharedStacks(self.view)
     captureDisplayMetrics(self, items)
     return true
 end
 
--- Read the bank's stacks for a page about to be placed, returning the item layer or nil
--- Extensions read their bank items from this snapshot while the page is shown
+-- Read bank items once for the page and its plugin.
 function BankPageItems:ReadBank()
     local bankItemLayer = component(BANK_ITEMS_STATIC_ID)
     if bankItemLayer == nil then return nil end
@@ -280,7 +261,7 @@ function BankPageItems:ReadBank()
     return bankItemLayer
 end
 
--- Use a placed page over the bank snapshot and count its slots that have a stack
+-- Apply the page layout and count slots with bank stacks.
 function BankPageItems:SetView(view, columns)
     self.view = view
     self.columns = columns
@@ -292,8 +273,7 @@ function BankPageItems:SetView(view, columns)
     return matchCount
 end
 
--- Build a page from bank items at the current column count
--- In an empty bank every slot is drawn as a ghost
+-- Lay out the page; missing stacks appear as ghost images.
 function BankPageItems:ApplyLayout(place)
     local bankItemLayer = self:ReadBank()
     if bankItemLayer == nil then return false, 0 end

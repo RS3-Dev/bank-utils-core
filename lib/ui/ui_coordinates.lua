@@ -1,5 +1,4 @@
--- Keep mouse and component positions aligned at every display scale
--- Interface units are game UI measurements, which can differ from screen pixels
+-- Align mouse pixels with game UI positions.
 
 local UICoordinates = {}
 
@@ -7,7 +6,6 @@ local MAX_PARENT_DEPTH = 32
 local POINTER_HOOK = "bankcore_pointer_scale"
 local calibratedPointerScale, gameScaleAtCalibration
 
--- Read the game's current interface scale
 local function interfaceScale()
     local scaleOption = game and game.options and game.options.InterfaceScale
     local scalePercent = scaleOption and tonumber(scaleOption.setting) or 100
@@ -37,12 +35,11 @@ function UICoordinates.trackPointer(component)
     end)
 end
 
--- Stop measuring the pointer over a component whose shape no longer matches its hover
+-- Stop tracking when the component changes shape.
 function UICoordinates.untrackPointer(component)
     component:Unsubscribe(ui.Hook.ONMOUSEREPEAT, POINTER_HOOK)
 end
 
--- Find a component's position inside another component
 function UICoordinates.relativePosition(component, ancestor)
     local x, y, parentComponent, parentCount = 0, 0, component, 0
     while parentComponent ~= nil and parentComponent ~= ancestor and parentCount < MAX_PARENT_DEPTH do
@@ -55,12 +52,7 @@ function UICoordinates.relativePosition(component, ancestor)
     return x, y
 end
 
--- Find the part of a component its containers show, in the root's content units
--- Positions are relative to each parent; each container below the root moves its children
--- by its own scroll once and clips them to its size
--- Returns nothing when the component is empty, clipped away or outside the root, or when it,
--- the root or a layer between them is hidden; the client's visibleGlobal also covers the
--- layers above the root
+-- Find the visible area within the root, accounting for scrolling and clipping.
 function UICoordinates.visibleArea(component, root)
     if component.visibleGlobal == false then return nil end
     local left, top, right, bottom = 0, 0, component.width, component.height
@@ -83,7 +75,6 @@ function UICoordinates.visibleArea(component, root)
     return left, top, right - left, bottom - top
 end
 
--- Find a component's position on the screen
 function UICoordinates.absolutePosition(component)
     local x, y, parentComponent, parentCount = 0, 0, component, 0
     while parentComponent ~= nil and parentCount < MAX_PARENT_DEPTH do
@@ -97,7 +88,7 @@ end
 
 -- Convert mouse pixels to the game's interface units
 function UICoordinates.interfaceMousePosition()
-    -- The host's position is unscaled and nil without a mouse
+    -- Mouse positions are unscaled pixels.
     local position = Mouse.GetPosition()
     if position == nil then return nil, nil end
     local scale = interfaceScale()

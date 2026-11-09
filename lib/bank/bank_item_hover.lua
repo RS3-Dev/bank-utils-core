@@ -1,4 +1,4 @@
--- Move a real bank stack beneath its page image so native input reaches it
+-- Move real bank items under page images to handle clicks.
 
 local Config = require("lib/core/config")
 local BankInterface = require("lib/core/bank_interface")
@@ -15,7 +15,7 @@ BankItemHover.__index = BankItemHover
 local BANK_ITEMS_STATIC_ID = BankInterface.ITEMS
 local GRID_SLOT_SIZE = BankGrid.SLOT_SIZE
 local OFFSCREEN_POSITION = -10000
--- Raise drag thresholds to keep ordinary clicks from starting a bank rearrangement
+-- Prevent clicks from accidentally rearranging the bank.
 local HOVERED_STACK_DRAG_DEAD_ZONE = 255
 local HOVERED_STACK_DRAG_DELAY_TICKS = 255
 local MISSING_STACK_RETRY_EVENT = Config.CORE_REF .. "_missing_stack_retry"
@@ -24,45 +24,34 @@ local STALE_READ_EVENT = Config.CORE_REF .. "_stale_page_read"
 local DROP_REFRESH_EVENT = Config.CORE_REF .. "_page_drop_refresh"
 local DROP_HOOK = Config.CORE_REF .. "_page_item_drop"
 
--- Find a native bank component by its interface slot
 local component = BankInterface.Get
 
--- Track the hovered stack and stacks moved out of its way
 function BankItemHover.new(bankView)
     return setmetatable({
         bankView = bankView,
         hoveredBankStack = nil,
         pageInputBlocker = nil,
         itemInputTargets = {},
-        -- Only visible item buttons need to be raised above the page each tick
+        -- Only raise visible buttons each tick.
         visibleItemInputTargets = {},
         clickablePageItems = {},
-        -- Drawn page items, including placeholders, used to identify right-clicked slots
+        -- Include placeholders when finding right-clicked items.
         drawnPageItems = {},
         inputBounds = nil,
         lastPointerX = nil,
         lastPointerY = nil,
-        -- A page rebuild can land a tick before the bank publishes new components
-        -- Retry a stationary pointer once so new components regain their hover and menu
+        -- New bank items may arrive a tick late; retry once.
         hoverRetryPending = false,
         inputVersion = 0,
         postRebuildRefreshRequested = false,
-        -- Save each real bank stack by its native slot key:
-        -- component and objectID identify the component and item last found in that slot
-        -- originalX and originalY are the bank's own position, before Core moves it
-        -- moved records whether the stack needs its original position restored
-        -- targetX and targetY are Core's current position; movedAside means off screen
-        -- originalSize is the bank's own size while Core gives the stack a custom item's
-        -- targetWidth and targetHeight
-        -- input holds the original click-through and drag settings for later restoration
+        -- Save each bank slot's position, size, and input settings for restoration.
         bankStacks = {},
-        -- Check only moved stacks each tick, rather than scanning the whole bank
+        -- Check only stacks Core has moved.
         movedStackKeys = {},
     }, BankItemHover)
 end
 
--- Let clicks pass through the buttons of items bound before a hovered custom item where they
--- overlap it, since the item bound last takes the pointer there
+-- Let clicks reach the topmost overlapping item.
 function BankItemHover:UncoverItemTarget(inputTarget, enabled)
     for _, inputTargetRecord in ipairs(self.visibleItemInputTargets) do
         local root = inputTargetRecord.root
@@ -190,13 +179,12 @@ local function restoreNativeInput(bankStack)
     restoreNativeDrag(savedInput)
 end
 
--- Save a stack's click-through and drag settings before Core first changes them
--- Settings saved from a replaced handle go back on that handle before the new one is read
+-- Save input settings before changing them; restore old handles first.
 local function saveNativeInput(bankStack)
     local nativeItem, savedInput = bankStack.component, bankStack.input
     if savedInput ~= nil and savedInput.component == nativeItem then return savedInput end
     restoreNativeInput(bankStack)
-    -- Both settings are Uint8 fields; the component can disappear while being read
+    -- The component may disappear while reading drag settings.
     local dragSettingsOK, dragSettings = pcall(function()
         local dragConfig = nativeItem.dragConfig
         return { deadZone = dragConfig.deadZone, delayTicks = dragConfig.dragDelayTicks }
@@ -212,7 +200,7 @@ local function saveNativeInput(bankStack)
     return savedInput
 end
 
--- Change a stack's click-through only when it differs, saving its own setting first
+-- Save the original setting before changing click-through.
 local function setStackClickthrough(bankStack, value)
     if bankStack.component.clickthrough == value then return end
     saveNativeInput(bankStack)
@@ -247,8 +235,7 @@ function BankItemHover:BindNativeScroll(bankStack)
     savedInput.unbindScroll = function() pageDisplay:UnbindScrollWheel(nativeItem) end
 end
 
--- Refresh after the host finishes a page-item drop
--- A hook left on a replaced handle or restored stack does nothing
+-- Refresh after a drop; ignore hooks on old or restored stacks.
 function BankItemHover:BindNativeDrop(bankStack)
     local savedInput = bankStack.input
     if savedInput.unbindDrop ~= nil then return end
@@ -257,7 +244,7 @@ function BankItemHover:BindNativeDrop(bankStack)
         local hoveredStack = self.hoveredBankStack
         if bankStack.input ~= savedInput or hoveredStack == nil
             or hoveredStack.item ~= nativeItem or self.bankView.shownPage == nil then return true end
-        -- Block input now; reread the bank after the client's drop handler returns
+        -- Block clicks until the game finishes the drop.
         self.dropRefreshPending = true
         hoveredStack.suspended = true
         self:BlockPageInput()
@@ -273,12 +260,12 @@ function BankItemHover:BindNativeDrop(bankStack)
     savedInput.unbindDrop = function() nativeItem:Unsubscribe(ui.Hook.ONDRAGCOMPLETE, DROP_HOOK) end
 end
 
--- Return every recorded stack's own input settings and remove Core's hooks
+-- Restore input settings and remove Core's hooks.
 function BankItemHover:RestoreNativeInput()
     for _, bankStack in pairs(self.bankStacks) do restoreNativeInput(bankStack) end
 end
 
--- Move a native item if needed, or force it after a rebuild; returns false if refused
+-- Move only when needed, except after a rebuild.
 local function setPositionIfChanged(nativeItem, x, y, forceRefresh)
     if nativeItem == nil then return false end
     if not forceRefresh
@@ -289,8 +276,7 @@ local function setPositionIfChanged(nativeItem, x, y, forceRefresh)
     return (pcall(function() nativeItem:SetPos(x, y) end))
 end
 
--- Resize a stack to a custom item's shown area, first saving the bank's own size with its anchors
--- The saved size stays through replaced handles, as a moved stack keeps the place it returns to
+-- Save the bank's size and anchors before resizing a stack.
 local function fitStackSize(bankStack, width, height)
     local nativeItem = bankStack.component
     if bankStack.originalSize == nil then
@@ -308,7 +294,7 @@ local function fitStackSize(bankStack, width, height)
     end))
 end
 
--- Give a stack Core resized back the bank's own size and anchors
+-- Restore the bank's size and anchors.
 local function restoreStackSize(bankStack)
     local size = bankStack ~= nil and bankStack.originalSize or nil
     if size == nil then return end
@@ -318,7 +304,6 @@ local function restoreStackSize(bankStack)
     end)
 end
 
--- Change a native item's click-through only when it differs
 local function setClickthroughIfChanged(nativeItem, value)
     if nativeItem == nil or nativeItem.clickthrough == value then return end
     pcall(function() nativeItem.clickthrough = value end)
@@ -332,7 +317,7 @@ local function itemQuantityState(nativeItem)
     return "stack"
 end
 
--- Return moved stacks to their original places, sizes and input, then forget them
+-- Restore moved stacks before forgetting them.
 function BankItemHover:RestoreBankItemPositions()
     for _, bankStack in pairs(self.bankStacks) do
         restoreStackSize(bankStack)
@@ -345,7 +330,7 @@ function BankItemHover:RestoreBankItemPositions()
     self.movedStackKeys = {}
 end
 
--- Forget a stack the bank no longer shows there, removing Core's size, settings and hooks
+-- Clean up a stack that no longer occupies its slot.
 function BankItemHover:ForgetBankStack(stackKey)
     local bankStack = self.bankStacks[stackKey]
     if bankStack == nil then return end
@@ -355,10 +340,7 @@ function BankItemHover:ForgetBankStack(stackKey)
     self.movedStackKeys[stackKey] = nil
 end
 
--- Record where the bank placed each stack, before any move and after a rebuild
--- A page build passes the bank items it just read; other callers read the bank again,
--- since the client may have replaced its stacks since then
--- A stack Core has moved keeps the place it returns to
+-- Save bank positions; moved stacks keep their original position.
 function BankItemHover:RecordBankItemPositions(bankItems)
     if self.bankView.shownPage == nil then return end
     if bankItems == nil then
@@ -375,7 +357,7 @@ function BankItemHover:RecordBankItemPositions(bankItems)
             bankStack.component = bankItem.component
             if not bankStack.moved then bankStack.originalX, bankStack.originalY = bankItem.x, bankItem.y end
         else
-            -- A slot reused for another object starts a new record
+            -- A different item starts a fresh record.
             self:ForgetBankStack(stackKey)
             self.bankStacks[stackKey] = { component = bankItem.component, objectID = bankItem.objectID,
                 originalX = bankItem.x, originalY = bankItem.y, moved = false }
@@ -386,7 +368,6 @@ function BankItemHover:RecordBankItemPositions(bankItems)
     end
 end
 
--- Get or create the stack's saved position record
 function BankItemHover:BankStack(stackKey, nativeItem)
     local bankStack = self.bankStacks[stackKey]
     local objectID = BankItemIndex.ObjectID(nativeItem)
@@ -399,8 +380,7 @@ function BankItemHover:BankStack(stackKey, nativeItem)
     return bankStack
 end
 
--- Reapply Core's positions and sizes if the client puts the stacks back
--- A stack that will not keep a custom item's size stops taking input there
+-- Reapply Core's layout; block clicks if a stack refuses its size.
 function BankItemHover:MaintainNativeItemPositions()
     if self.bankView.shownPage == nil then return end
     local hoveredStackKey = self.hoveredBankStack ~= nil and self.hoveredBankStack.nativeKey or nil
@@ -449,8 +429,7 @@ function BankItemHover:CheckHoveredBankStack()
     return true
 end
 
--- Check whether a stack's original bounds intersect the hovered item's target
--- A grid slot's target is a cell at its stack's place; a custom item's is the area its stack covers
+-- Check for bank stacks overlapping the hovered item.
 local function overlapsTarget(bankStack, hoveredStack)
     local nativeItem = bankStack.component
     local width, height = nativeItem.width, nativeItem.height
@@ -461,7 +440,7 @@ local function overlapsTarget(bankStack, hoveredStack)
         and bankStack.originalY < targetY + (hoveredStack.targetHeight or GRID_SLOT_SIZE)
 end
 
--- Move overlapping bank stacks aside so the intended stack receives the click
+-- Move overlapping stacks aside so clicks reach the right item.
 function BankItemHover:MoveOverlappingBankStacksAside(hoveredStackKey, hoveredStack, forceRefresh)
     for stackKey, bankStack in pairs(self.bankStacks) do
         if stackKey ~= hoveredStackKey and overlapsTarget(bankStack, hoveredStack) then
@@ -480,8 +459,7 @@ function BankItemHover:MoveOverlappingBankStacksAside(hoveredStackKey, hoveredSt
     end
 end
 
--- Restore moved stacks and their original click and drag settings
--- Core's wheel and drop hooks stay until the stack's record is forgotten
+-- Restore stacks and input settings; keep hooks until their records are removed.
 function BankItemHover:RestoreMovedBankStacks(hoveredStackKey, retainHostPositions)
     for stackKey in pairs(self.movedStackKeys) do
         local bankStack = self.bankStacks[stackKey]
@@ -503,21 +481,19 @@ function BankItemHover:RestoreMovedBankStacks(hoveredStackKey, retainHostPositio
     end
 end
 
--- Cancel the pending retry for an item missing in a rebuild
 function BankItemHover:CancelMissingStackRetry()
     Event.Logic.Unsubscribe(MISSING_STACK_RETRY_EVENT)
 end
 
--- Cancel the pending refresh after bank components change
 function BankItemHover:CancelBankRebuildRefresh()
     Event.Logic.Unsubscribe(BANK_REBUILD_REFRESH_EVENT)
     self.postRebuildRefreshRequested = false
 end
 
--- Reconnect next tick, since new native items can appear after the rebuild
+-- Wait a tick for new bank items after a rebuild.
 function BankItemHover:RefreshAfterBankRebuild(refreshShownPage)
     self:CancelBankRebuildRefresh()
-    -- The drop's forced refresh already covers this inventory notification
+    -- The drop already queued a refresh.
     if self.dropRefreshPending then return end
     self.postRebuildRefreshRequested = refreshShownPage == true
     local inputVersionAtStart = self.inputVersion
@@ -534,7 +510,7 @@ function BankItemHover:RefreshAfterBankRebuild(refreshShownPage)
             self.bankView:RefreshShownPage()
             return
         end
-        -- One read serves the position record and the stack check below
+        -- Reuse this bank read for both checks.
         local bankItemLayer = component(BANK_ITEMS_STATIC_ID)
         local bankItems = bankItemLayer ~= nil and BankItemIndex.Read(bankItemLayer) or nil
         self:RecordBankItemPositions(bankItems)
@@ -544,7 +520,7 @@ function BankItemHover:RefreshAfterBankRebuild(refreshShownPage)
             return
         end
         local hadHoveredStack = self.hoveredBankStack ~= nil
-        -- A quantity change that gives a slot another stack rebuilds the page's entries
+        -- Rebuild if a slot now points to another stack.
         if hadHoveredStack and self.bankView.pageState:StacksReassigned(bankItems) then
             self.bankView:RefreshShownPage()
             return
@@ -567,7 +543,7 @@ function BankItemHover:RefreshAfterBankRebuild(refreshShownPage)
     end)
 end
 
--- Retry once next tick before rebuilding an unresolved page
+-- Retry missing items once before rebuilding.
 function BankItemHover:RetryMissingStack()
     self:CancelMissingStackRetry()
     Event.Logic.Subscribe(MISSING_STACK_RETRY_EVENT, function()
@@ -582,8 +558,7 @@ function BankItemHover:RetryMissingStack()
     end)
 end
 
--- Reread changed bank items after the hovered stack returns home
--- Original positions are needed to sort matching stacks in bank order
+-- Restore bank positions before sorting matching stacks.
 function BankItemHover:BeginStaleRead()
     Event.Logic.Subscribe(STALE_READ_EVENT, function()
         Event.Logic.Unsubscribe(STALE_READ_EVENT)
@@ -595,7 +570,7 @@ function BankItemHover:BeginStaleRead()
     end)
 end
 
--- Stop letting clicks through and restore moved items when hover ends
+-- Block clicks and restore stacks when hover ends.
 function BankItemHover:RestoreHoveredBankStack()
     self:CancelMissingStackRetry()
     local hoveredStack = self.hoveredBankStack
@@ -618,7 +593,7 @@ function BankItemHover:RestoreHoveredBankStack()
     end
 end
 
--- Release the stack under a custom view's item that its plugin unbound or bound to another object
+-- Release the hovered stack when its binding changes.
 function BankItemHover:ReleaseBinding(binding)
     local hoveredStack = self.hoveredBankStack
     if hoveredStack == nil or hoveredStack.entry.binding ~= binding then return end
@@ -626,7 +601,7 @@ function BankItemHover:ReleaseBinding(binding)
     self:RestoreHoveredBankStack()
 end
 
--- Bring the blocker to the front before restoring native items during a rebuild
+-- Raise the blocker before restoring stacks.
 function BankItemHover:BlockPageInput()
     self:LetClicksReachBankStack(false)
     if self.pageInputBlocker == nil then return false end
@@ -634,7 +609,7 @@ function BankItemHover:BlockPageInput()
     return true
 end
 
--- Close input and release hover, keeping the viewport blocker
+-- Stop item input but keep the blocker.
 function BankItemHover:PausePageInput()
     self:CancelBankRebuildRefresh()
     self:BlockPageInput()
@@ -644,7 +619,7 @@ function BankItemHover:PausePageInput()
     self.hoverRetryPending = false
 end
 
--- End delayed work and destroy input when leaving the page
+-- Cancel pending work and remove page input.
 function BankItemHover:RemovePageInput()
     Event.Logic.Unsubscribe(DROP_REFRESH_EVENT)
     self.dropRefreshPending = false
@@ -680,8 +655,7 @@ function BankItemHover:RemovePageInput()
     self.hoverRetryPending = false
 end
 
--- Clip each item's reusable input target to the visible viewport
--- An item without an area, such as a hidden custom item, takes no input
+-- Only the visible part of an item receives clicks.
 function BankItemHover:PositionItemInputTargets(pageArea)
     pageArea = pageArea or self.inputBounds or self.bankView.pageDisplay.pageArea
     if pageArea == nil then return false end
@@ -728,7 +702,7 @@ function BankItemHover:UpdateItemInputTargets(pageArea)
     for index, pageItem in ipairs(self.clickablePageItems) do
         local inputTargetRecord = self.itemInputTargets[index]
         if inputTargetRecord == nil then
-            -- Recorded before it is set up, so a failure removes it with the page input
+            -- Record it first so cleanup can remove a failed build.
             local root = ui.Button.new(self.bankView.components.all)
             inputTargetRecord = { root = root, entry = nil }
             self.itemInputTargets[index] = inputTargetRecord
@@ -772,8 +746,7 @@ function BankItemHover:RefreshHoveredBankStack(
     local hoveredStack = self.hoveredBankStack
     if hoveredStack == nil or self.bankView.shownPage == nil then return false end
     if self.dropRefreshPending then self:BlockPageInput() return false end
-    -- Inventory events can redraw native items above our click targets
-    -- Close input and bring the blocker to the front before any native item moves
+    -- Rebuilt bank items may cover our buttons; raise the blocker first.
     self:BlockPageInput()
     if hoveredStack.hit ~= nil then hoveredStack.hit.clickthrough = false end
 
@@ -800,9 +773,9 @@ function BankItemHover:RefreshHoveredBankStack(
     end
     self:CancelMissingStackRetry()
     local quantityState = itemQuantityState(nativeItem)
-    -- A stack found in another native slot leaves the old one its own size
+    -- Restore the old slot's size when the stack changes slots.
     if nativeKey ~= hoveredStack.nativeKey then restoreStackSize(self.bankStacks[hoveredStack.nativeKey]) end
-    -- A zero-quantity native slot is still a real drag source
+    -- Empty bank slots can still be dragged.
     self:RestoreMovedBankStacks(hoveredStack.nativeKey, quantityState ~= "unknown")
     local bankStack = self:BankStack(nativeKey, nativeItem)
     hoveredStack.suspended = false
@@ -814,11 +787,11 @@ function BankItemHover:RefreshHoveredBankStack(
         self:RestoreHoveredBankStack()
         return false
     end
-    -- Update the page record to use the client's current component and quantity
+    -- Use the bank's current stack and quantity.
     bankItem.component, bankItem.quantity = nativeItem, nativeItem.associatedObjectQuantity
     self.bankView.pageDisplay:UpdatePlaceholder(nativeItem, bankItem.instanceKey)
 
-    -- Organizer pages can let players drag real items into the game's bank tabs.
+    -- Some pages allow dragging items into bank tabs.
     if self.bankView.shownPage.allowNativeDrag == true then
         restoreNativeDrag(saveNativeInput(bankStack))
     else
@@ -829,11 +802,9 @@ function BankItemHover:RefreshHoveredBankStack(
     bankStack.targetX, bankStack.targetY = hoveredStack.targetX, hoveredStack.targetY
     self.movedStackKeys[nativeKey] = true
 
-    -- Rebuilds can replace native items and put every one back in place
-    -- Move aside what sits under this slot again before reopening input
+    -- Rebuilt stacks may be back in place; move overlaps aside again.
     self:MoveOverlappingBankStacksAside(nativeKey, hoveredStack, true)
-    -- A custom item's stack covers exactly its shown area, sized before it is placed
-    -- A stack that cannot take that size takes no input there
+    -- Match the shown item's size before allowing clicks.
     if hoveredStack.targetWidth ~= nil
         and not fitStackSize(bankStack, hoveredStack.targetWidth, hoveredStack.targetHeight) then
         self:RestoreHoveredBankStack()
@@ -847,29 +818,25 @@ function BankItemHover:RefreshHoveredBankStack(
     return true
 end
 
--- Report whether a page item has a native stack moved under it
 function BankItemHover:HasHoveredBankStack()
     return self.hoveredBankStack ~= nil
 end
 
--- Identify stacks moved aside so their menu actions cannot target the wrong item
+-- Block menu actions on stacks moved aside.
 function BankItemHover:IsBankStackMovedAside(
     objectID,
     categoryID,
     dynamicID
 )
     if objectID == nil or categoryID == nil or dynamicID == nil then return false end
-    -- The menu's slot IDs name the record, as they name every bank stack's key
+    -- Menu slot IDs match the saved stack keys.
     local stackKey = BankItemIndex.ComponentKey({ categoryID = categoryID, dynamicID = dynamicID })
     local bankStack = self.movedStackKeys[stackKey] and self.bankStacks[stackKey] or nil
     return bankStack ~= nil and bankStack.movedAside
         and (bankStack.objectID == objectID or BankItemIndex.ObjectID(bankStack.component) == objectID)
 end
 
--- Find where a page item's stack goes in the bank's item layer, where its scroll shows the item
--- A grid slot's stack keeps its own size at the slot; a custom item's stack covers the part of
--- its area the viewport shows, whose size is returned too
--- Returns nothing for an item with no stack or no part showing
+-- Find the stack's visible bank position and custom size, if any.
 function BankItemHover:StackTarget(pageItem)
     local nativeScrollDifference = self:NativeScrollOffset()
     local area = pageItem.area
@@ -884,7 +851,7 @@ function BankItemHover:StackTarget(pageItem)
     return left, top + nativeScrollDifference, right - left, bottom - top
 end
 
--- Place the real bank stack beneath one page item
+-- Place the bank stack under its page image.
 function BankItemHover:MoveBankStackToSlot(inputTarget, pageItem, forceRefresh)
     if self.dropRefreshPending then self:BlockPageInput() return false end
     if self.bankView.shownPage == nil then return true end
@@ -895,7 +862,7 @@ function BankItemHover:MoveBankStackToSlot(inputTarget, pageItem, forceRefresh)
         self:LetClicksReachBankStack(false, inputTarget)
         return false
     end
-    -- Place the native stack where the bank's scroll shows the rendered slot
+    -- Account for the bank's scroll position.
     local nativeScrollDifference = self:NativeScrollOffset()
     local hoveredStack = self.hoveredBankStack
     if hoveredStack ~= nil
@@ -903,8 +870,7 @@ function BankItemHover:MoveBankStackToSlot(inputTarget, pageItem, forceRefresh)
         and hoveredStack.hit == inputTarget
         and hoveredStack.targetX == targetX and hoveredStack.targetY == targetY
         and hoveredStack.targetWidth == targetWidth and hoveredStack.targetHeight == targetHeight then
-        -- Keep the same stack in place while moving within its cell
-        -- Replaced components, unknown quantities and bank changes still refresh it
+        -- Keep the stack in place unless the bank changed.
         local bankStack = self.bankStacks[hoveredStack.nativeKey]
         local nativeItem = bankStack ~= nil and bankStack.component or nil
         local quantityState = itemQuantityState(nativeItem)
@@ -926,18 +892,17 @@ function BankItemHover:MoveBankStackToSlot(inputTarget, pageItem, forceRefresh)
         bankItem.layoutKey,
         tostring(bankItem.component)
     )
-    -- The layout may be ready a tick before its native component
-    -- Report that so the pointer refresh can make its one retry
+    -- Retry next tick if the bank item is not ready.
     if nativeItem == nil then return false end
     self.hoveredBankStack = {
-        -- entry is the drawn item; item is the real bank component receiving input
+        -- The drawn item and the real stack receiving clicks.
         entry = pageItem,
         item = nativeItem,
         objectID = pageItem.objectID,
         nativeKey = nativeKey,
         targetX = targetX,
         targetY = targetY,
-        -- Set only for a custom item, whose stack takes this size
+        -- Custom items resize their bank stack.
         targetWidth = targetWidth,
         targetHeight = targetHeight,
         nativeOffset = nativeScrollDifference,
@@ -946,8 +911,7 @@ function BankItemHover:MoveBankStackToSlot(inputTarget, pageItem, forceRefresh)
     return self:RefreshHoveredBankStack(nil, nativeItem, nativeKey)
 end
 
--- Keep the blocker and reuse input targets for the refreshed page
--- A redraw passes its entries; other rebuilds read the page afresh
+-- Reuse page input targets after a refresh.
 function BankItemHover:BuildPageInput(entries)
     if self.bankView.shownPage == nil then
         self:RemovePageInput()
@@ -963,8 +927,7 @@ function BankItemHover:BuildPageInput(entries)
     end
 
     entries = entries or self.bankView:BuildPageItems()
-    -- Items with a bank stack to reach take item input; a custom view's item with none takes the
-    -- pointer too, so nothing bound beneath it is reached there
+    -- Custom items without a stack still block items beneath them.
     local interactivePageItems = {}
     for _, pageItem in ipairs(entries) do
         if pageItem.bankItem ~= nil or pageItem.binding ~= nil then
@@ -1049,7 +1012,7 @@ function BankItemHover:UpdateHoveredItem(forceRefresh)
 
     local pointerInsideViewport = localX >= 0 and localX < pageArea.width
         and localY >= 0 and localY < pageArea.height
-    -- The item drawn on top takes the pointer; one with no bank stack covers what lies beneath
+    -- The topmost item gets the pointer, even without a bank stack.
     local pageDisplay = self.bankView.pageDisplay
     local pageItem = pointerInsideViewport and pageDisplay:EntryAtPosition(
         self.drawnPageItems,
@@ -1068,28 +1031,25 @@ function BankItemHover:UpdateHoveredItem(forceRefresh)
             self.hoverRetryPending = false
             return true
         end
-        -- A forced check or pointer move gets one retry next tick, not a check every frame
+        -- Retry once next tick, rather than every frame.
         self.hoverRetryPending = forceRefresh or pointerMoved
         return false
     end
     self.hoverRetryPending = false
     self:RestoreHoveredBankStack()
     self:LetClicksReachBankStack(false)
-    -- Show the item name when no native stack can provide its tooltip
+    -- Show a name when the bank cannot provide a tooltip.
     pageDisplay:ShowItemName(pageItem, pageArea)
     return false
 end
 
--- Place item input where a custom view's items now show, and check the pointer against them
--- again as if it had moved, so the item on top beneath it takes the pointer
+-- Move click areas with custom items and recheck the pointer.
 function BankItemHover:FollowItemAreas()
     self:PositionItemInputTargets()
     self.lastPointerX, self.lastPointerY = nil, nil
 end
 
--- Stack the blocker, a shown item name, visible item targets, then the column's overlay
--- A custom view's own layer goes above its item targets, so its plugin's unbound controls
--- take input; the item name and the view's overlay go above that
+-- Keep custom controls, tooltips, and popups above item input.
 function BankItemHover:RaisePageInput()
     if self.pageInputBlocker == nil then return false end
     local pageDisplay = self.bankView.pageDisplay

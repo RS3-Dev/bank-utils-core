@@ -2,7 +2,6 @@
 
 local PublicAPI = {}
 
--- Give one plugin controls for its page or view, bank details, and menus.
 local function createExtensionHandle(pluginPages, menuRouter, extension)
     return {
         SetPage = function(_, page) return pluginPages:SetPage(extension, page) end,
@@ -18,7 +17,6 @@ local function createExtensionHandle(pluginPages, menuRouter, extension)
     }
 end
 
--- Create the shared plugin API for pages and menus.
 -- Keep only functions here because the game copies this table.
 function PublicAPI.new(pluginPages, menuRouter)
     return {

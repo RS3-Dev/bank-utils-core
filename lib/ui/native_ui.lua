@@ -1,4 +1,4 @@
--- Native sprite and style IDs the bank draws with, and the page scrollbar
+-- Bank styles, sprites, and scrollbar controls.
 
 local NativeUi = {}
 
@@ -17,22 +17,21 @@ local TRACK_SPRITE = 792
 local THUMB_TOP_SPRITE = 18423
 local THUMB_BOTTOM_SPRITE = 18424
 local THUMB_MIDDLE_SPRITE = 18425
--- Input parts sit beneath their decorations, and the arrows above everything
+-- Draw decorations above input areas, with arrows on top.
 local PART_ORDER = { "track", "trackSprite", "thumb", "thumbTop", "thumbMiddle", "thumbBottom",
     "upArrow", "downArrow" }
 
--- Known style IDs for styles the host's id.StyleSheet may not name
+-- Fallback IDs for styles missing from the game's lookup.
 local STYLE_FALLBACK_IDS = {
     RECT_BLACK = 269,
     BUTTON_PANEL = 318,
 }
 
--- Resolve a named native style through host IDs or the known style table
+-- Use the game's style ID when available.
 function NativeUi.styleID(styleName)
     return id.StyleSheet[styleName] or STYLE_FALLBACK_IDS[styleName]
 end
 
--- Create a scrollbar sprite with a generated ID
 local function scrollbarSprite(parent, spriteID, clickthrough)
     local sprite = ui.Sprite.new(parent)
     sprite.sprite = spriteID
@@ -41,7 +40,7 @@ local function scrollbarSprite(parent, spriteID, clickthrough)
     return sprite
 end
 
--- Create a nearly clear rectangle that takes scrollbar input
+-- An almost transparent rectangle still receives clicks.
 local function inputRectangle(parent)
     local rectangle = ui.Rectangle.new(parent)
     rectangle.colour = Vector4.new(1.0, 1.0, 1.0, 0.01)
@@ -49,7 +48,6 @@ local function inputRectangle(parent)
     return rectangle
 end
 
--- Place one scrollbar part
 local function setBounds(part, x, y, width, height)
     part:SetPos(x, y)
     part:SetSize(width, height)
@@ -58,8 +56,7 @@ end
 local Scrollbar = {}
 Scrollbar.__index = Scrollbar
 
--- Build the arrows, track, and thumb and connect their clicks
--- The caller owns the parent, so it removes a scrollbar that fails partway
+-- The caller removes the scrollbar if setup fails.
 function NativeUi.createScrollbar(parent, options)
     local scrollbar = setmetatable({ height = options.height }, Scrollbar)
     scrollbar.upArrow = scrollbarSprite(parent, UP_SPRITE, false)
@@ -68,7 +65,7 @@ function NativeUi.createScrollbar(parent, options)
     scrollbar.track.stylesheetID = NativeUi.styleID("RECT_BLACK")
     scrollbar.trackSprite = scrollbarSprite(parent, TRACK_SPRITE, true)
     scrollbar.thumb = inputRectangle(parent)
-    -- The thumb's sprites only draw it, so clicks pass through to the thumb
+    -- Decorations let clicks reach the thumb.
     scrollbar.thumbTop = scrollbarSprite(parent, THUMB_TOP_SPRITE, true)
     scrollbar.thumbMiddle = scrollbarSprite(parent, THUMB_MIDDLE_SPRITE, true)
     scrollbar.thumbBottom = scrollbarSprite(parent, THUMB_BOTTOM_SPRITE, true)
@@ -78,30 +75,26 @@ function NativeUi.createScrollbar(parent, options)
     scrollbar.track:Subscribe(ui.Hook.ONCLICK, options.onTrackClick)
     scrollbar.thumb:Subscribe(ui.Hook.ONCLICK, options.onThumbClick)
     scrollbar.thumb:Subscribe(ui.Hook.ONHOLD, options.onThumbHold)
-    -- Releasing the thumb ends the drag
     scrollbar.thumb:Subscribe(ui.Hook.ONRELEASE, options.onThumbRelease)
     scrollbar.thumb:Subscribe(ui.Hook.ONDRAGCOMPLETE, options.onThumbRelease)
     return scrollbar
 end
 
--- Measure the track between the two arrows
 function Scrollbar:TrackHeight()
     return math.max(1, self.height - ARROW_HEIGHT * 2)
 end
 
--- Size the thumb to the visible share of content, with a minimum height
+-- Match the thumb to the visible share of content.
 function Scrollbar:ThumbHeight(contentHeight)
     if contentHeight <= self.height then return self:TrackHeight() end
     return math.max(MIN_THUMB_HEIGHT,
         math.floor(self.height / contentHeight * self:TrackHeight()))
 end
 
--- Find how far the thumb travels within the track
 function Scrollbar:ThumbTravel(contentHeight)
     return self:TrackHeight() - self:ThumbHeight(contentHeight)
 end
 
--- Convert a content offset to the thumb's offset within the track
 local function thumbOffset(self, contentHeight, scrollY)
     local maxScrollY = contentHeight - self.height
     local travel = self:ThumbTravel(contentHeight)
@@ -109,7 +102,7 @@ local function thumbOffset(self, contentHeight, scrollY)
     return math.floor(scrollY / maxScrollY * travel + 0.5)
 end
 
--- Convert a height in the track to the offset that centres the thumb there
+-- Centre the thumb on a point in the track.
 function Scrollbar:ScrollFromTrack(trackY, contentHeight)
     local maxScrollY = contentHeight - self.height
     local travel = self:ThumbTravel(contentHeight)
@@ -118,8 +111,7 @@ function Scrollbar:ScrollFromTrack(trackY, contentHeight)
     return math.max(0, math.min(travel, thumbY)) / travel * maxScrollY
 end
 
--- Show controls only for overflowing content; the caller's backdrop still covers the bank's bar
--- Place every part for the content height and offset, then order them
+-- Hide controls when content fits; keep the bank's scrollbar covered.
 function Scrollbar:Refresh(contentHeight, scrollY)
     local hidden = contentHeight <= self.height
     local trackHeight = self:TrackHeight()

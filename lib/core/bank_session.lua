@@ -1,5 +1,4 @@
--- Connect the bank display, plugins, game events, menus, and settings.
--- Creating a session does not start it; the main entry point calls Start.
+-- Manage the bank session, plugins, events, and settings.
 
 local BankWindowRecord = require("lib/bank/bank_window_record")
 local Config = require("lib/core/config")
@@ -33,17 +32,15 @@ local function shouldCheckBankItems(tick)
         or tick == BANK_ITEMS_SETTLE_TICKS
 end
 
--- Check whether the game's bank window is open.
 local function bankIsOpen()
     return ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__BANK_WINDOW) ~= nil
 end
 
--- Check whether an inventory update belongs to the bank.
 local function isBankInventoryEvent(event)
     return event.inv.id == Config.BANK_INVENTORY_ID
 end
 
--- Check the control and its parents to see if it belongs to the bank.
+-- Check the control's parents too.
 local function belongsToBank(component)
     local current = component
     local depth = 0
@@ -55,7 +52,6 @@ local function belongsToBank(component)
     return false
 end
 
--- Find the bank item named in a right-click menu.
 local function bankItemFromMenu(miniMenu)
     if miniMenu == nil or miniMenu.entries == nil then return nil end
 
@@ -76,7 +72,6 @@ local function bankItemFromMenu(miniMenu)
     return nil
 end
 
--- Check whether the chosen menu action belongs to the bank.
 local function selectedEntryBelongsToBank(event)
     local entry = event.entry
     local componentData = entry.componentData
@@ -84,7 +79,7 @@ local function selectedEntryBelongsToBank(event)
     return component ~= nil and belongsToBank(component)
 end
 
--- Recognize All Items and bank tab actions, ignoring text formatting and case.
+-- Match bank tab actions regardless of case or formatting.
 local function bankViewSelection(event)
     if not selectedEntryBelongsToBank(event) then return nil end
     local actionText = string.lower(event.entry.verbText
@@ -99,8 +94,7 @@ local function bankViewSelection(event)
     return nil
 end
 
--- Create a session without starting event listeners.
--- Options can supply settings and saved window changes.
+-- Create the session; Start adds event listeners.
 function BankSession.new(options)
     options = options or {}
     local session = setmetatable({
@@ -138,20 +132,18 @@ function BankSession.new(options)
     return session
 end
 
--- Stop waiting for the bank to be ready and reset the counters.
 function BankSession:StopLayoutRetry()
     Event.Logic.Unsubscribe(BANK_ATTACH_RETRY_EVENT)
     self.layoutRetryTicks = 0
     self.layoutReadyTicks = 0
 end
 
--- Stop follow-up checks after a bank action.
 function BankSession:StopFilterSettle()
     Event.Logic.Unsubscribe(BANK_ITEMS_SETTLE_EVENT)
     self.filterSettleTicks = 0
 end
 
--- Keep the displayed plugin page in sync while the bank finishes updating.
+-- Refresh the page while bank updates settle.
 function BankSession:BeginFilterSettle()
     if not self.inGame or self.layout.shownPage == nil then return end
     self:StopFilterSettle()
@@ -174,7 +166,7 @@ function BankSession:BeginFilterSettle()
     end)
 end
 
--- Wait for several checks to confirm the bank is ready before adding controls.
+-- Wait for several ready checks before adding controls.
 function BankSession:BeginLayoutRetry()
     if not self.inGame then return end
     self:StopLayoutRetry()
@@ -201,7 +193,6 @@ function BankSession:BeginLayoutRetry()
     end)
 end
 
--- Save one setting, keeping the rest unchanged.
 function BankSession:SavePreference(key, value)
     if self.shutDown then return false, "Bank Core is not running." end
     local preferences = {}
@@ -212,7 +203,6 @@ function BankSession:SavePreference(key, value)
     return true
 end
 
--- Save the debug setting, then turn logging on or off.
 function BankSession:SetDebugPreference(enabled)
     local saved, reason = self:SavePreference("enableDebug", enabled == true)
     if not saved then return false, reason end
@@ -220,8 +210,7 @@ function BankSession:SetDebugPreference(enabled)
     return true
 end
 
--- Detach before forgetting geometry, so live sidebar offsets can still be undone.
--- Do not attach again until the next bank opening.
+-- Undo window changes before forgetting them; reconnect on the next bank opening.
 function BankSession:ResetGeometry()
     if self.shutDown then return false, "Bank Core is not running." end
     local ok, message = pcall(function() self:CloseBank() end)
@@ -235,7 +224,6 @@ function BankSession:ResetGeometry()
     return true
 end
 
--- Add Core's settings to the game's plugin settings area.
 function BankSession:CreateContentLayer(parent)
     if self.shutDown then return end
     self:DestroyPanel()
@@ -246,13 +234,11 @@ function BankSession:CreateContentLayer(parent)
     })
 end
 
--- Remove Core's settings panel.
 function BankSession:DestroyPanel()
     if self.panel ~= nil then self.panel:Destroy() end
     self.panel = nil
 end
 
--- Stop bank checks and undo window changes when leaving the game.
 function BankSession:SuspendGameUI()
     self.inGame = false
     self:StopLayoutRetry()
@@ -261,7 +247,7 @@ function BankSession:SuspendGameUI()
     self.layout:Restore()
 end
 
--- Resume bank handling and add controls if the bank is already open.
+-- Attach if the bank is already open.
 function BankSession:ResumeGameUI()
     if self.shutDown then return end
     self.inGame = true
@@ -269,7 +255,6 @@ function BankSession:ResumeGameUI()
     if bankIsOpen() then self:BeginLayoutRetry() end
 end
 
--- Stop bank checks and undo window changes when the bank closes.
 function BankSession:CloseBank()
     self:StopLayoutRetry()
     self:StopFilterSettle()
@@ -277,22 +262,20 @@ function BankSession:CloseBank()
     self.layout:Restore()
 end
 
--- Apply the saved debug setting and start listening for game events.
 function BankSession:Start()
     DebugLog.SetEnabled(self.preferences.enableDebug)
     self.lifecycle:Start()
 end
 
--- Close plugin access, stop event listeners, and undo bank window changes.
--- Log page cleanup errors so the remaining shutdown steps can run.
+-- Close plugins before stopping the session.
 function BankSession:Shutdown()
     if self.shutDown then return end
-    -- Catch errors so this step cannot interrupt the rest of shutdown.
+    -- Continue shutdown even if page cleanup fails.
     local function close(label, action)
         local ok, message = pcall(action)
         if not ok then debugLog("Bank Core shutdown could not close ", label, ": ", message) end
     end
-    -- Close plugin pages first so the displayed page can clean up normally.
+    -- Let the page clean up before removing its bank view.
     close("extension pages", function() self.pluginPages:Close() end)
     self.lifecycle:Shutdown()
 end

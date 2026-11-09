@@ -19,8 +19,7 @@ local function drawSidebar(ctx)
     end)
 end
 
--- Core calls drawSidebar when this icon's column opens or resizes.
--- Core destroys the controls when the column closes.
+-- Core draws on open or resize, then removes the controls on close.
 local registration = {
     id = "examples.sidebar", name = "Sidebar example", icon = "LIST_LAYOUT",
     column = { mount = drawSidebar },

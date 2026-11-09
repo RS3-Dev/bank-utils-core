@@ -1,5 +1,4 @@
--- Draw sidebar icons and arrows for icons that do not fit
--- An icon pressed and released selects; dragged, it moves to a new place in the rail
+-- Draw sidebar tabs; click to select, drag to reorder.
 
 local Config = require("lib/core/config")
 local BankControls = require("lib/ui/bank_controls")
@@ -20,14 +19,13 @@ local ARROW_ICON_SIZE = 16
 local MAX_SLOTS = 24
 local BACKDROP_SPRITE = 18035 -- RS3_CHILD_CONTENT_TILE
 local DRAG_HOOK = Config.CORE_REF .. "_tab_drag"
--- How far the pointer moves, in interface units, before a press becomes a drag
+-- Distance in game UI units before a press becomes a drag.
 local DRAG_DISTANCE = 6
 local GHOST_ALPHA = 0.88
 local SOURCE_ALPHA = 0.4
 local INDICATOR_HEIGHT = 2
 
--- Choose which tabs fit in a height, keeping the active one in view if asked
--- Returns the first index, count, first position, and whether arrows show
+-- Choose the visible tabs and arrow positions.
 function SidebarTabRail.Layout(tabCount, activeIndex, firstTabIndex, height)
     local tabsWithoutArrows = math.min(MAX_SLOTS, math.floor((height + TAB_GAP) / TAB_STEP))
     if tabCount <= tabsWithoutArrows then
@@ -36,7 +34,7 @@ function SidebarTabRail.Layout(tabCount, activeIndex, firstTabIndex, height)
     local arrowSpace = ARROW_HEIGHT + TAB_GAP
     local visibleTabCount = math.min(MAX_SLOTS,
         math.floor((height - arrowSpace * 2 + TAB_GAP) / TAB_STEP))
-    -- Too short for arrows and a tab: show only the active tab
+    -- If space is tight, show only the active tab.
     if visibleTabCount < 1 then
         return { first = activeIndex or 1, shown = math.min(1, tabCount), top = 0, arrows = false }
     end
@@ -48,7 +46,6 @@ function SidebarTabRail.Layout(tabCount, activeIndex, firstTabIndex, height)
     return { first = firstTabIndex, shown = visibleTabCount, top = arrowSpace, arrows = true }
 end
 
--- Create an empty rail
 function SidebarTabRail.new(parent, options)
     local self = setmetatable({
         x = options.x,
@@ -56,7 +53,6 @@ function SidebarTabRail.new(parent, options)
         height = options.height,
         onSelect = options.onSelect,
         onReorder = options.onReorder,
-        -- The press or drag in progress on an icon
         gesture = nil,
         tabs = {},
         activeID = nil,
@@ -69,11 +65,10 @@ function SidebarTabRail.new(parent, options)
     self.root:SetPos(self.x, self.y)
     self.root:SetSize(TAB_SIZE, self.height)
     self.root.clickthrough = false
-    -- Draw tooltips in the window rather than clipped to the rail
+    -- Keep tooltips outside the rail so they are not clipped.
     prettyui.Tooltip.registerContext(self.root, parent, function(target)
         return UICoordinates.relativePosition(target, parent)
     end)
-    -- Keep the background behind the icon buttons
     self.background = ui.Sprite.new(self.root)
     self.background:SetSize(TAB_SIZE, self.height)
     self.background.spriteID = BACKDROP_SPRITE
@@ -82,26 +77,24 @@ function SidebarTabRail.new(parent, options)
     return self
 end
 
--- Fit the rail to a new height, ending any press or drag
+-- End any press or drag before resizing.
 function SidebarTabRail:SetHeight(height)
     if height == self.height then return end
     self:StopGesture()
     self.height = height
     self.root:SetSize(TAB_SIZE, height)
     self.background:SetSize(TAB_SIZE, height)
-    -- The arrows depend on the height, so the tabs are always redrawn
+    -- Redraw because arrow positions depend on height.
     self.signature = nil
     self:SetTabs(self.tabs, self.activeID)
 end
 
--- Return the ID of the icon being dragged, or nil
 local function draggedID(self)
     local gesture = self.gesture
     return gesture ~= nil and gesture.dragging and gesture.tabID or nil
 end
 
--- Report whether a button is still the rail's own: a drawn icon, or the cover of a drag
--- A cancelled cover or an icon a redraw replaced is obsolete
+-- Ignore buttons replaced by a redraw or cancelled drag.
 local function isCurrent(self, button)
     if draggedID(self) ~= nil and self.gesture.button == button then return true end
     for _, drawn in ipairs(self.buttons) do
@@ -110,13 +103,11 @@ local function isCurrent(self, button)
     return false
 end
 
--- Check whether a rail point is over a drawn button
 local function isOver(button, x, y)
     local root = button.root
     return x >= root.x and x < root.x + root.width and y >= root.y and y < root.y + root.height
 end
 
--- Find a tab's position in the current list
 function SidebarTabRail:IndexOf(tabID)
     for index, tab in ipairs(self.tabs) do
         if tab.id == tabID then return index end
@@ -124,8 +115,7 @@ function SidebarTabRail:IndexOf(tabID)
     return nil
 end
 
--- Show these tabs with one active, keeping the active or a moved tab in view
--- New tab definitions end a press or drag; a drag keeps the rail where it was paged
+-- Update tabs, keeping the active or moved tab visible.
 function SidebarTabRail:SetTabs(tabs, activeID, focusID)
     if tabs ~= self.tabs then self:StopGesture() end
     local keptID = focusID or activeID
@@ -137,7 +127,7 @@ function SidebarTabRail:SetTabs(tabs, activeID, focusID)
     self:Draw()
 end
 
--- Page the visible tabs up or down without changing the active tab
+-- Scroll tabs without changing the selection.
 function SidebarTabRail:Scroll(tabOffset)
     if self.view == nil or not self.view.arrows then return false end
     self.view = SidebarTabRail.Layout(#self.tabs, nil, self.first + tabOffset, self.height)
@@ -147,7 +137,7 @@ function SidebarTabRail:Scroll(tabOffset)
     return true
 end
 
--- Describe what is drawn so an unchanged rail is not rebuilt
+-- Skip redraws when nothing changed.
 local function describeVisibleTabs(self)
     local parts = { tostring(self.activeID), self.view.first, self.view.shown,
         tostring(self.view.arrows), tostring(draggedID(self)) }
@@ -157,8 +147,7 @@ local function describeVisibleTabs(self)
     return table.concat(parts, "\n")
 end
 
--- Destroy the drawn tabs, arrows, and selection frame
--- A press not yet dragging ends with the icon it was on
+-- Remove drawn controls and end any press on them.
 function SidebarTabRail:Clear()
     if draggedID(self) == nil then self.gesture = nil end
     for index = #self.controls, 1, -1 do
@@ -170,7 +159,6 @@ function SidebarTabRail:Clear()
     self.downArrow = nil
 end
 
--- Outline the active tab with the native gold frame
 local function addSelectionFrame(self, y)
     local frame = BankControls.frame(self.root, Theme.SELECTED_BORDER)
     frame:SetPos(0, y)
@@ -179,7 +167,7 @@ local function addSelectionFrame(self, y)
     self.controls[#self.controls + 1] = frame
 end
 
--- Copy the dragged icon's frame, picture and selection outline, none taking input
+-- Draw a copy of the dragged icon that lets clicks through.
 local function newGhost(self, button, active)
     local frame = ui.Button.new(self.root)
     frame:SetSize(TAB_SIZE, TAB_SIZE)
@@ -200,7 +188,6 @@ local function newGhost(self, button, active)
     return ghost
 end
 
--- Build the visible tabs, the active frame, and the paging arrows
 function SidebarTabRail:Draw()
     local drawnTabsSummary = describeVisibleTabs(self)
     if drawnTabsSummary == self.signature then return end
@@ -211,7 +198,7 @@ function SidebarTabRail:Draw()
     for visibleTabIndex = 1, visibleTabs.shown do
         local tab = self.tabs[visibleTabs.first + visibleTabIndex - 1]
         local y = visibleTabs.top + (visibleTabIndex - 1) * TAB_STEP
-        -- The rail takes the icon's presses itself, acting on release
+        -- Select on release rather than press.
         local button = BankControls.button(self.root, nil, nil, {
             x = 0,
             y = y,
@@ -227,7 +214,7 @@ function SidebarTabRail:Draw()
         self.buttons[#self.buttons + 1] = button
         self.controls[#self.controls + 1] = button
         if tab.id == self.activeID then addSelectionFrame(self, y) end
-        -- The dragged icon stays in its place, faded
+        -- Leave a faded copy in the original position.
         if tab.id == dragged then
             button.root.alpha = SOURCE_ALPHA
             button.icon.alpha = SOURCE_ALPHA
@@ -237,10 +224,8 @@ function SidebarTabRail:Draw()
     self:RaiseDrag()
 end
 
--- Build the paging arrows above and below the tabs
 function SidebarTabRail:DrawArrows()
     local visibleTabs = self.view
-    -- Return an arrow that pages the tabs one step
     local function arrow(y, spriteName, tooltip, tabOffset, disabled)
         local button = BankControls.button(self.root, nil, function()
             self:Scroll(tabOffset)
@@ -262,10 +247,8 @@ function SidebarTabRail:DrawArrows()
         "More tabs below", 1, visibleTabs.first + visibleTabs.shown - 1 >= #self.tabs)
 end
 
--- Take an icon's press, holds and release; native drag positions are not used
--- An obsolete button's late input does nothing, so it cannot start or end a current gesture
+-- Handle presses and drags, ignoring events from replaced buttons.
 function SidebarTabRail:BindTab(button)
-    -- Pass one hook to the gesture while the button is still the rail's own
     local function handle(action)
         return function()
             if isCurrent(self, button) then action(self, button) end
@@ -274,15 +257,14 @@ function SidebarTabRail:BindTab(button)
     end
     local root = button.root
     root:Subscribe(ui.Hook.ONCLICK, DRAG_HOOK, handle(self.Press))
-    -- The client may report a held pointer as a hold or as its own drag
+    -- The game can send either hold or drag events.
     root:Subscribe(ui.Hook.ONHOLD, DRAG_HOOK, handle(self.MoveGesture))
     root:Subscribe(ui.Hook.ONDRAG, DRAG_HOOK, handle(self.MoveGesture))
-    -- Either release event finishes the gesture; a second finds nothing left to do
+    -- Either release event ends the drag; ignore duplicates.
     root:Subscribe(ui.Hook.ONRELEASE, DRAG_HOOK, handle(self.Release))
     root:Subscribe(ui.Hook.ONDRAGCOMPLETE, DRAG_HOOK, handle(self.Release))
 end
 
--- Find the pointer in rail coordinates, or nil without a mouse
 function SidebarTabRail:Pointer()
     local x, y = UICoordinates.interfaceMousePosition()
     if x == nil then return nil, nil end
@@ -290,12 +272,11 @@ function SidebarTabRail:Pointer()
     return x - originX, y - originY
 end
 
--- Check whether a rail point is inside the rail
 function SidebarTabRail:Contains(x, y)
     return x ~= nil and x >= 0 and x < TAB_SIZE and y >= 0 and y < self.height
 end
 
--- Report the paging arrow at a rail height: -1 above, 1 below, or nil
+-- Arrow direction: -1 above, 1 below, nil elsewhere.
 function SidebarTabRail:ArrowAt(y)
     if not self.view.arrows then return nil end
     if y < ARROW_HEIGHT then return -1 end
@@ -303,12 +284,11 @@ function SidebarTabRail:ArrowAt(y)
     return nil
 end
 
--- Find where a dragged icon would land, or nil where it would not move
--- Returns the index it goes before and the visible gap the line shows in
+-- Find the drop position and its visible gap.
 function SidebarTabRail:DropTarget(y)
     local view = self.view
     if y < view.top or self:ArrowAt(y) ~= nil then return nil end
-    -- The upper half of an icon places the drop before it, the lower half after it
+    -- Drop before the icon's top half, after its bottom half.
     local gap = math.floor((y - view.top - TAB_SIZE / 2) / TAB_STEP) + 1
     gap = math.max(0, math.min(view.shown, gap))
     local before = view.first + gap
@@ -317,7 +297,7 @@ function SidebarTabRail:DropTarget(y)
     return before, gap
 end
 
--- Begin a press; a press while a drag is stuck only ends that drag
+-- A new press cancels a stuck drag.
 function SidebarTabRail:Press(button)
     if self.gesture ~= nil and self.gesture.dragging then
         self:CancelDrag()
@@ -327,7 +307,7 @@ function SidebarTabRail:Press(button)
     self.gesture = { button = button, tabID = button.tabID, x = x, y = y, dragging = false }
 end
 
--- Follow the held pointer, turning a press into a drag once it moves far enough
+-- Start dragging once the pointer moves far enough.
 function SidebarTabRail:MoveGesture(button)
     local gesture = self.gesture
     if gesture == nil or gesture.button ~= button or gesture.x == nil then return end
@@ -342,9 +322,7 @@ function SidebarTabRail:MoveGesture(button)
     self:UpdateDrag(x, y)
 end
 
--- Stretch the pressed icon into an unseen cover over the rail, with a ghost and insertion line
--- The client sends the press's holds and release to that icon as the pointer crosses the rail,
--- so redraws leave it alone; its hover no longer measures the pointer from its old shape
+-- Keep the pressed button as an invisible cover so it still receives drag events.
 function SidebarTabRail:BeginDrag()
     local gesture = self.gesture
     local button = gesture.button
@@ -357,13 +335,13 @@ function SidebarTabRail:BeginDrag()
     end
     button:StopHover()
     local cover = button.root
-    -- Removing a tooltip puts back the input setting it found, so the cover sets its own
+    -- Tooltip removal resets input settings; override them afterward.
     cover.clickthrough = false
     cover.alpha = 0
     cover:SetPos(0, 0)
     cover:SetSize(TAB_SIZE, self.height)
     button.icon.hidden = true
-    -- Leaving the rail cancels, since a release outside it may never arrive
+    -- Cancel outside the rail, where release events may not arrive.
     cover:Subscribe(ui.Hook.ONMOUSELEAVE, function()
         if not self:Contains(self:Pointer()) then self:CancelDrag() end
         return true
@@ -378,7 +356,7 @@ function SidebarTabRail:BeginDrag()
     self:Draw()
 end
 
--- Move the ghost and insertion line, paging once each time the pointer reaches an arrow
+-- Move the drag preview; scroll once per arrow visit.
 function SidebarTabRail:UpdateDrag(x, y)
     local gesture = self.gesture
     if not self:Contains(x, y) then
@@ -403,7 +381,7 @@ function SidebarTabRail:UpdateDrag(x, y)
     end
 end
 
--- Keep the drag's cover, insertion line and ghost above redrawn icons
+-- Keep the drag preview above redrawn icons.
 function SidebarTabRail:RaiseDrag()
     local gesture = self.gesture
     if gesture == nil or not gesture.dragging then return end
@@ -415,8 +393,7 @@ function SidebarTabRail:RaiseDrag()
     if ghost.outline ~= nil then ghost.outline:MoveToFront() end
 end
 
--- Select a pressed icon released over it, or drop a dragged one where the pointer is
--- A press with no pointer to read still selects, as a tap does; such a drag cancels
+-- Release to select or drop; without a pointer, only selection works.
 function SidebarTabRail:Release(button)
     local gesture = self.gesture
     if gesture == nil or gesture.button ~= button then return end
@@ -441,29 +418,27 @@ function SidebarTabRail:Release(button)
         table.insert(tabIDs, before > from and before - 1 or before, gesture.tabID)
         self.onReorder(tabIDs, gesture.tabID)
     end
-    -- Unfade the icon if the move was not shown
+    -- Restore the icon if the move was not displayed.
     self:Draw()
 end
 
--- Forget the press or drag in progress, reporting whether a drag was showing
+-- Clear the gesture and report whether it was a drag.
 function SidebarTabRail:StopGesture()
     local gesture = self.gesture
     self.gesture = nil
     if gesture == nil or not gesture.dragging then return false end
     local ghost = gesture.ghost
-    -- The outline comes last since only an active icon's ghost has one
+    -- The outline may be missing; keep it last so cleanup reaches every part.
     for _, part in ipairs({ ghost.frame, ghost.icon, gesture.indicator, gesture.button, ghost.outline }) do
         pcall(function() part:Destroy() end)
     end
     return true
 end
 
--- End a drag without moving anything and redraw the tabs
 function SidebarTabRail:CancelDrag()
     if self:StopGesture() then self:Draw() end
 end
 
--- Remove the rail and everything drawn on it
 function SidebarTabRail:Destroy()
     self:StopGesture()
     self:Clear()

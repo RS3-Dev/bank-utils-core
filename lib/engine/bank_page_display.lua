@@ -1,4 +1,4 @@
--- Draw page images and headings at the positions used for item input
+-- Draw page items and headings where clicks reach them.
 
 local Config = require("lib/core/config")
 local BankInterface = require("lib/core/bank_interface")
@@ -27,7 +27,6 @@ local VISUAL_SYNC_EVENT = Config.CORE_REF .. "_visual_sync"
 -- Wait for a steady width before changing how many items fit per row
 local REFLOW_QUIET_TICKS = 10
 
--- Set up page drawing, layout, and scroll state for the bank
 function BankPageDisplay.new(bankView)
     return setmetatable({
         bankView = bankView,
@@ -35,37 +34,34 @@ function BankPageDisplay.new(bankView)
         background = nil,
         contentViewport = nil,
         contentLayer = nil,
-        -- A custom view's layer over the window, for its plugin's popups
+        -- Popups above the window.
         viewOverlay = nil,
-        -- The page items drawn, in page order, and the sprite that draws each one
+        -- Drawn items and their sprites, in page order.
         items = {},
         sprites = {},
-        -- Position, size and scroll offsets of the visible item area
         pageArea = nil,
         scrollY = nil,
         scrollbarLayer = nil,
         scrollbarBackdrop = nil,
         scrollbar = nil,
         scrollDragStart = nil,
-        -- The extension and opening the scroll position belongs to
+        -- The page opening that owns the saved scroll position.
         scrollOwner = nil,
         scrollKey = nil,
         nativeScrollY = nil,
         scrollInteractionTicks = 0,
-        -- Whether the page's logic listener is subscribed
         visualSyncing = false,
-        -- The item-layer width last seen, and a custom view's height, and how many ticks they held
+        -- Wait for width and custom height to settle before redrawing.
         reflowWidth = nil,
         reflowHeight = nil,
         reflowTicks = 0,
-        -- The name shown beside a drawn item with no bank stack, and the slot it marks
+        -- Tooltip for an item without a real bank stack.
         nameAnchor = nil,
         nameTooltip = nil,
         nameText = nil,
     }, BankPageDisplay)
 end
 
--- Read the visible item area and its scroll offsets
 function BankPageDisplay:ReadPageArea()
     local all = self.bankView.components.all
     local bank = ui.Interfaces:GetInterface(Config.BANK_INTERFACE_ID)
@@ -89,16 +85,14 @@ function BankPageDisplay:ReadPageArea()
     }
 end
 
--- Centre item images within their larger clickable cells
--- The page state always holds a measured positive item size
+-- Centre images in their clickable cells.
 function BankPageDisplay:GridCellInset()
     local pageState = self.bankView.pageState
     return math.max(0, math.floor((GRID_SLOT_SIZE - pageState.itemWidth) / 2)),
         math.max(0, math.floor((GRID_SLOT_SIZE - pageState.itemHeight) / 2))
 end
 
--- Describe the shown item area for a custom view: its screen position in interface units,
--- size and scroll, with the native item size and the grid Core's own pages use
+-- Describe the visible area and grid for a custom view.
 function BankPageDisplay:ViewGeometry()
     local pageArea, pageState = self.pageArea, self.bankView.pageState
     local x, y = UICoordinates.absolutePosition(self.layer)
@@ -108,8 +102,7 @@ function BankPageDisplay:ViewGeometry()
         stepX = GRID_STEP, stepY = GRID_STEP }
 end
 
--- Copy an entry's quantity, outline, shadow, and opacity onto its sprite
--- Fields an entry leaves unset keep the sprite's current look
+-- Apply supplied sprite settings; keep the rest.
 local function applyAppearance(sprite, pageItem)
     if pageItem.quantity ~= nil then sprite.associatedObjectQuantity = pageItem.quantity end
     if pageItem.quantityMode ~= nil then sprite.associatedObjectQuantityMode = pageItem.quantityMode end
@@ -118,19 +111,16 @@ local function applyAppearance(sprite, pageItem)
     sprite.alpha = pageItem.alpha
 end
 
--- Stop the listener that keeps the page and hover positions up to date
 function BankPageDisplay:StopVisualSync()
     self.visualSyncing = false
     Event.Logic.Unsubscribe(VISUAL_SYNC_EVENT)
 end
 
--- Keep a shown item name above the input blocker
 function BankPageDisplay:RaiseItemName()
     if self.nameText ~= nil then self.nameTooltip:Show() end
 end
 
--- Name a drawn item beside its slot, or hide the name for no item
--- Only items with no bank stack beneath come here; stacks keep the bank's own tooltip
+-- Supply tooltips for items without a bank stack.
 function BankPageDisplay:ShowItemName(pageItem, pageArea)
     local name = pageItem ~= nil and ObjectConfig.DisplayName(pageItem.objectID) or nil
     if name == nil then return self:HideItemName() end
@@ -138,12 +128,11 @@ function BankPageDisplay:ShowItemName(pageItem, pageArea)
     if self.nameAnchor == nil then
         self.nameAnchor = ui.Layer.new(parent)
         self.nameTooltip = prettyui.Tooltip.attach(self.nameAnchor, parent, name)
-        -- The anchor only places the tooltip, so input still reaches the page
+        -- The tooltip anchor must let clicks through.
         self.nameAnchor.clickthrough = true
     elseif self.nameText ~= name then
         self.nameTooltip:SetText(name)
     end
-    -- The item's input area, where the page and its menus find the item
     local area = pageItem.area
     self.nameAnchor:SetPos(pageArea.x + pageArea.contentX + area.x,
         pageArea.y + pageArea.contentY + area.y - pageArea.scrollY)
@@ -152,14 +141,12 @@ function BankPageDisplay:ShowItemName(pageItem, pageArea)
     self.nameTooltip:Show()
 end
 
--- Hide the item name until another nameless slot is hovered
 function BankPageDisplay:HideItemName()
     if self.nameText == nil then return end
     self.nameText = nil
     self.nameTooltip:Hide()
 end
 
--- Remove the item name and its anchor
 function BankPageDisplay:DestroyItemName()
     local tooltip, anchor = self.nameTooltip, self.nameAnchor
     self.nameAnchor, self.nameTooltip, self.nameText = nil, nil, nil
@@ -167,7 +154,7 @@ function BankPageDisplay:DestroyItemName()
     if anchor ~= nil then pcall(function() anchor:Destroy() end) end
 end
 
--- Remove the page's layers; destroying them removes everything drawn in them
+-- Removing layers also removes their contents.
 local function destroyPageLayers(self)
     local layer, overlay = self.layer, self.viewOverlay
     self.layer, self.viewOverlay = nil, nil
@@ -190,7 +177,7 @@ function BankPageDisplay:DestroyRuntimeSprites()
     self:DestroyScrollbar(true)
 end
 
--- Size the scrolling content to the page's height, never less than the viewport
+-- Content must be at least as tall as the viewport.
 function BankPageDisplay:FitContent(pageArea)
     if self.contentViewport == nil then return end
     local contentHeight = math.max(pageArea.height, self:ContentHeightForCurrentLayout())
@@ -210,7 +197,7 @@ function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, reque
     local observedScrollY = pageArea.scrollY
     local targetScrollY = requestedScrollY
     if targetScrollY == nil then
-        -- Our page controls the scroll; native actions may briefly put back an old one
+        -- Bank actions can briefly reset our scroll offset.
         targetScrollY = self.scrollY
     end
     if targetScrollY == nil then targetScrollY = observedScrollY end
@@ -218,7 +205,7 @@ function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, reque
     if targetScrollY ~= observedScrollY then
         self:ApplyViewportScroll(pageArea.viewport, targetScrollY)
     end
-    -- The bank can stop short of the page offset, so items use the offset it took
+    -- Use the scroll offset the bank actually accepted.
     pageArea.nativeScrollY = pageArea.viewport.scrollY
     pageArea.scrollY = targetScrollY
     local previousPageArea = self.pageArea
@@ -252,8 +239,7 @@ function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, reque
     return scrollChanged, pageAreaChanged
 end
 
--- Rearrange rows after the window width stops changing
--- A custom view is drawn again once its width and height settle at a new size
+-- Redraw once the page size settles.
 function BankPageDisplay:ReflowSettledWidth()
     local width, view = self.pageArea.width, self.bankView.customView
     local height = view ~= nil and self.pageArea.height or nil
@@ -271,11 +257,9 @@ function BankPageDisplay:ReflowSettledWidth()
     return self.bankView:ReflowShownPage()
 end
 
--- Keep the page aligned as the player scrolls or resizes
--- Keep this listener during rebuilds so a delayed removal cannot cancel its replacement
+-- Keep updates running during rebuilds so old cleanup cannot stop new updates.
 function BankPageDisplay:StartVisualSync()
     local bankView = self.bankView
-    -- The page was just laid out at the size it starts with
     self.reflowWidth = self.pageArea.width
     self.reflowHeight = bankView.customView ~= nil and self.pageArea.height or nil
     self.reflowTicks = 0
@@ -294,20 +278,20 @@ function BankPageDisplay:StartVisualSync()
             bankView.itemHover:BlockPageInput()
             return
         end
-        -- Bindings a custom view changed since the last tick rebuild its input once
+        -- Refresh changed bindings once per tick.
         local view = bankView.customView
         if view ~= nil and view.changed then
             bankView:RebindShownPage()
             return
         end
-        -- Item input follows the components a custom view's plugin moves, hides or clips
+        -- Keep click areas aligned with custom items.
         if view ~= nil then bankView:FollowCustomView() end
         local previousScrollY = self.scrollY
         local scrollChanged, pageAreaChanged = self:UpdateListItemPositions(true)
         if pageAreaChanged then
             bankView.itemHover:RecordBankItemPositions()
         end
-        -- A rewrap rebuilt the page and reset the width it waits on
+        -- Rewrapping already reset the width check.
         if self:ReflowSettledWidth() then return end
         bankView.itemHover:FollowNativeScroll()
         if scrollChanged then
@@ -330,8 +314,7 @@ function BankPageDisplay:StartVisualSync()
     end)
 end
 
--- Choose where a page starts: a redraw of the same opening keeps its scroll, while another
--- extension's page or a new opening starts at the top; the bank's own offset is kept for leaving
+-- Redraws keep their scroll position; new page openings start at the top.
 local function startingScroll(self, pageArea)
     local page = self.bankView.shownPage
     if self.scrollOwner == page.owner and self.scrollKey == page.key then
@@ -344,10 +327,7 @@ local function startingScroll(self, pageArea)
     return 0
 end
 
--- Make the shown page's layers in place of the previous page's, at its starting scroll
--- Core draws a grid page in the content layer; a custom view's plugin draws there, with
--- controls that take input, and in an overlay above the window
--- Each layer is recorded before it is set up, so a failed build is removed with the page
+-- Record new layers before setup so cleanup can remove a failed build.
 function BankPageDisplay:CreatePageLayers(custom)
     local all = self.bankView.components.all
     local pageArea = self:ReadPageArea()
@@ -357,7 +337,6 @@ function BankPageDisplay:CreatePageLayers(custom)
     pageArea.scrollY = scrollY
     self.pageArea, self.scrollY = pageArea, scrollY
 
-    -- The old page is removed now, since nothing shows it from here
     destroyPageLayers(self)
     self.layer = ui.Layer.new(all)
     self.layer:SetPos(pageArea.x, pageArea.y)
@@ -371,7 +350,7 @@ function BankPageDisplay:CreatePageLayers(custom)
     self.background.rgba = BANK_VIEWPORT_COLOUR
     self.background.clickthrough = true
 
-    -- The outer layer stays fixed; the nested viewport scrolls everything at once
+    -- The outer layer stays fixed while its contents scroll together.
     self.contentViewport = ui.Layer.new(self.layer)
     self.contentLayer = ui.Layer.new(self.contentViewport)
     self.contentViewport:SetPos(0, 0)
@@ -390,8 +369,7 @@ function BankPageDisplay:CreatePageLayers(custom)
     return self.contentLayer, self.viewOverlay
 end
 
--- Show the drawn page: fit its content and scroll, then keep it aligned
--- A custom view's height is known only once its plugin has drawn, so the fit comes last
+-- Fit the page after drawing, when its full height is known.
 function BankPageDisplay:ShowPageLayers(pageItems, sprites)
     self.items, self.sprites = pageItems, sprites
     self:FitContent(self.pageArea)
@@ -402,14 +380,12 @@ function BankPageDisplay:ShowPageLayers(pageItems, sprites)
     self:StartVisualSync()
 end
 
--- Draw the shown page with native sprites, keeping its scroll position
--- Input reuses the same entries the redraw built
+-- Redraw with the same item data used for clicks.
 function BankPageDisplay:CreateRuntimeSprites(pageItems)
     local contentLayer = self:CreatePageLayers(false)
     if contentLayer == nil then return end
     local pageArea = self.pageArea
 
-    -- Add a section label and divider line that take no clicks
     local function addHeading(text, relativeY)
         local header = ui.Layer.new(contentLayer)
         local headerWidth = math.max(1, pageArea.width - pageArea.contentX - GRID_LEFT * 2)
@@ -437,7 +413,6 @@ function BankPageDisplay:CreateRuntimeSprites(pageItems)
         separator.clickthrough = true
     end
 
-    -- Page headings and section headings share one style
     for _, section in ipairs(self.bankView.pageState:GetLayoutSections()) do
         addHeading(section.label, section.y)
     end
@@ -455,11 +430,10 @@ function BankPageDisplay:CreateRuntimeSprites(pageItems)
     self:ShowPageLayers(pageItems, sprites)
 end
 
--- Refresh rendered items without changing their fixed page slots
--- A slot drawn at another size needs a redraw
+-- Refresh sprites in place unless their size changed.
 function BankPageDisplay:RefreshRuntimeSprites(pageItems)
     if #pageItems ~= #self.items then return false end
-    -- Both lists follow page order; check every match before changing any sprite
+    -- Check all matches before changing any sprites.
     for index, drawnItem in ipairs(self.items) do
         local pageItem = pageItems[index]
         if pageItem.layoutKey ~= drawnItem.layoutKey or pageItem.objectID ~= drawnItem.objectID
@@ -475,7 +449,7 @@ function BankPageDisplay:RefreshRuntimeSprites(pageItems)
     return true
 end
 
--- Refresh the drawn slots a native stack shows after it changed quantity or emptied
+-- Update every slot showing the changed stack.
 function BankPageDisplay:UpdatePlaceholder(item, instanceKey)
     if item == nil then return false end
     local objectID = item.associatedObjectID
@@ -498,8 +472,7 @@ function BankPageDisplay:UpdatePlaceholder(item, instanceKey)
     return placeholder
 end
 
--- Find the page item under the pointer, measured inside the viewport
--- Where custom items overlap, the one bound last is on top
+-- Find the item under the pointer; the last bound item wins overlaps.
 function BankPageDisplay:EntryAtPosition(pageItems, pageArea, x, y)
     x = tonumber(x)
     y = tonumber(y)

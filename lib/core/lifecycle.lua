@@ -16,7 +16,6 @@ local GAME_STATE_EVENT = Config.CORE_REF .. "_game_state"
 local CONTENT_EVENT = Config.CORE_REF .. "_content"
 local SETTINGS_EVENT = Config.CORE_REF .. "_settings"
 
--- Connect event handling to one bank session.
 function Lifecycle.new(session, options)
     return setmetatable({
         session = session,
@@ -24,7 +23,6 @@ function Lifecycle.new(session, options)
     }, Lifecycle)
 end
 
--- Listen for game events and send them to the session.
 function Lifecycle:Start()
     local session = self.session
     local options = self.options
@@ -59,7 +57,7 @@ function Lifecycle:Start()
             return
         end
         if session.inGame and options.selectedEntryBelongsToBank(event) then
-            -- Check for preset view changes here because they have no separate event.
+            -- Preset changes have no event of their own.
             session.layout:Changed(false)
             if session.layout.shownPage ~= nil
                 and not session.layout.itemHover:HasHoveredBankStack() then
@@ -88,13 +86,12 @@ function Lifecycle:Start()
     debugLog("Bank Core started its bank session")
 end
 
--- Stop event listeners, remove Core's panel, and undo bank window changes.
 function Lifecycle:Shutdown()
     local session = self.session
     if session.shutDown then return end
     session.shutDown = true
 
-    -- Catch cleanup errors so later steps can still restore the bank.
+    -- Continue restoring the bank after cleanup errors.
     local function cleanup(label, action)
         local ok, message = pcall(action)
         if not ok then
@@ -117,7 +114,7 @@ function Lifecycle:Shutdown()
     local bankView = session.layout
     if bankView == nil then return end
     cleanup("bank layout", function() bankView:Restore() end)
-    -- Save last so any unsaved window changes can be retried later.
+    -- Save last to include any remaining window changes.
     cleanup("bank window record", function() bankView.windowRecord:Save() end)
     session.layout = nil
 end

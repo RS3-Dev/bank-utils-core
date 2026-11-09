@@ -16,41 +16,37 @@ local ENGINE_SCROLL_HOOK = Config.CORE_REF .. "_engine_scroll"
 local SCROLLBAR_WIDTH = NativeUi.SCROLLBAR_WIDTH
 local SCROLL_INTERACTION_SETTLE_TICKS = 8
 
--- Find a native bank component by its interface slot
 local component = BankInterface.Get
 
--- Read the page's total height, including its title
 function BankPageScroll:ContentHeightForCurrentLayout()
     local placedPage = self.bankView.pageState.view
     return placedPage ~= nil and placedPage.height or 0
 end
 
--- Find the furthest scroll position that keeps the page within the viewport
 function BankPageScroll:MaxScrollY(pageArea)
     pageArea = pageArea or self.pageArea or self:ReadPageArea()
     if pageArea == nil then return 0 end
     return math.max(0, self:ContentHeightForCurrentLayout() - pageArea.height)
 end
 
--- Move the native bank viewport; its scrollY is read-only
+-- Move the viewport because scrollY is read-only.
 function BankPageScroll:ApplyViewportScroll(viewport, scrollY)
     viewport:SetScrollPos(0, scrollY)
 end
 
--- Pause hover so scrolling cannot switch the stack beneath a stationary pointer
+-- Pause hover so scrolling cannot change the item under the mouse.
 function BankPageScroll:BeginScrollInteraction()
     self.scrollInteractionTicks = SCROLL_INTERACTION_SETTLE_TICKS
     self.bankView.itemHover:PauseHoverForScroll()
 end
 
--- Start the hover pause for any scroll movement
 function BankPageScroll:OnScrollChanged(previousY, newY)
     if previousY == newY then return false end
     self:BeginScrollInteraction()
     return true
 end
 
--- Keep hover off until scrolling has settled for a few ticks
+-- Wait a few ticks for scrolling to settle before enabling hover.
 function BankPageScroll:HoldPointerInteractionDuringScroll(scrollChanged)
     if self.scrollInteractionTicks <= 0 then return false end
     self.bankView.itemHover:PauseHoverForScroll()
@@ -60,7 +56,7 @@ function BankPageScroll:HoldPointerInteractionDuringScroll(scrollChanged)
     return true
 end
 
--- Keep the requested offset in range, update the page, and pause hover
+-- Keep the scroll offset in range and pause hover.
 function BankPageScroll:SetScrollPosition(requestedScrollY, rebuildInteractiveLayers)
     local pageArea = self:ReadPageArea()
     if pageArea == nil then return false end
@@ -75,13 +71,12 @@ function BankPageScroll:SetScrollPosition(requestedScrollY, rebuildInteractiveLa
     pageArea.scrollY = scrollY
     self:UpdateListItemPositions(rebuildInteractiveLayers ~= false, scrollY)
     if not self:OnScrollChanged(previousScrollY, scrollY) then
-        -- Scrolling at the top or bottom still counts, even though the offset cannot move
+        -- Pause hover even at the scroll limits.
         self:BeginScrollInteraction()
     end
     return true
 end
 
--- Move the page by a relative offset
 function BankPageScroll:ScrollBy(delta)
     local pageArea = self:ReadPageArea()
     if pageArea == nil then return false end
@@ -92,18 +87,16 @@ function BankPageScroll:ScrollBy(delta)
     return true
 end
 
--- Make the mouse wheel move the page by rows
 function BankPageScroll:BindScrollWheel(componentValue)
     if componentValue == nil then return end
     componentValue:Subscribe(ui.Hook.ONSCROLLWHEEL, ENGINE_SCROLL_HOOK,
         function(_, delta)
-            -- Scroll a page only while it is shown; otherwise leave the wheel to the bank
+            -- Leave the wheel to the bank when the page is hidden.
             if self.bankView.shownPage == nil then return false end
             return self:ScrollBy(delta * GRID_STEP)
         end)
 end
 
--- Return a component's wheel input to the host
 function BankPageScroll:UnbindScrollWheel(componentValue)
     componentValue:Unsubscribe(ui.Hook.ONSCROLLWHEEL, ENGINE_SCROLL_HOOK)
 end
@@ -113,7 +106,7 @@ function BankPageScroll:DestroyScrollbar(restoreNativeScroll)
     local viewport = restoreNativeScroll and self.nativeScrollY ~= nil
         and component(BANK_ITEMS_CONTAINER_STATIC_ID) or nil
     if viewport ~= nil then
-        -- The bank may be closing, so its viewport can be stale
+        -- The viewport may disappear as the bank closes.
         pcall(function() viewport:SetScrollPos(0, self.nativeScrollY) end)
     end
     if self.scrollbarLayer ~= nil then
@@ -129,7 +122,6 @@ function BankPageScroll:DestroyScrollbar(restoreNativeScroll)
     self.scrollInteractionTicks = 0
 end
 
--- Update the scrollbar thumb from content height and offset
 function BankPageScroll:RefreshScrollbar(pageArea)
     if self.scrollbar == nil then return end
     pageArea = pageArea or self.pageArea or self:ReadPageArea()
@@ -137,8 +129,7 @@ function BankPageScroll:RefreshScrollbar(pageArea)
     self.scrollbar:Refresh(math.max(1, self:ContentHeightForCurrentLayout()), pageArea.scrollY)
 end
 
--- Centre the thumb on the pointer's height in the track
--- Click coordinates have no documented origin, so this uses the calibrated pointer
+-- Use the measured pointer position; click coordinates have no known origin.
 local function scrollToPointer(self, track)
     local _, mouseY = UICoordinates.interfaceMousePosition()
     if mouseY == nil then return true end
@@ -147,7 +138,7 @@ local function scrollToPointer(self, track)
         math.max(1, self:ContentHeightForCurrentLayout())), true)
 end
 
--- Start a thumb drag from the pointer and the page's offset, leaving the page still
+-- Start dragging without jumping the page.
 local function startThumbDrag(self)
     local _, mouseY = UICoordinates.interfaceMousePosition()
     if mouseY == nil then return true end
@@ -158,7 +149,7 @@ local function startThumbDrag(self)
     return true
 end
 
--- Move the page by the held pointer's travel since the thumb was pressed
+-- Scroll by the distance the pointer has moved.
 local function dragThumb(self)
     local _, mouseY = UICoordinates.interfaceMousePosition()
     local start = self.scrollDragStart
@@ -175,9 +166,7 @@ local function dragThumb(self)
     return true
 end
 
--- Build the scrollbar layer, backdrop, and controls as one widget
--- It is recorded only once complete; a refused part or hook removes the layer and fails
--- the page change, whose recovery still restores the bank's recorded scroll
+-- Remove the whole scrollbar if any part fails to build.
 local function buildScrollbar(self, height)
     local layer = ui.Layer.new(self.bankView.components.all)
     local backdrop, scrollbar
@@ -200,8 +189,7 @@ local function buildScrollbar(self, height)
                 return true
             end,
         })
-        -- Anywhere over the scrollbar the wheel scrolls the page, and hovering calibrates
-        -- the pointer, so a click or drag here needs no earlier hover over a page item
+        -- Hover measures the pointer so clicks and drags work immediately.
         for _, part in ipairs({ layer, scrollbar.upArrow, scrollbar.downArrow, scrollbar.track,
             scrollbar.thumb }) do
             self:BindScrollWheel(part)
@@ -217,7 +205,7 @@ local function buildScrollbar(self, height)
     self.scrollbar = scrollbar
 end
 
--- Create scroll controls once, then fit and refresh them with the viewport
+-- Reuse scroll controls when the viewport changes.
 function BankPageScroll:CreateScrollbar(pageArea)
     if self.bankView.components.all == nil then return end
     if self.scrollbarLayer == nil then
@@ -235,7 +223,6 @@ function BankPageScroll:CreateScrollbar(pageArea)
     self.scrollbarLayer:MoveToFront()
 end
 
--- Add these scrolling methods to the BankPageDisplay class
 function BankPageScroll.install(target)
     for name, method in pairs(BankPageScroll) do
         if name ~= "install" then target[name] = method end

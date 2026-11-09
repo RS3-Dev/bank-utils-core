@@ -6,7 +6,6 @@ CorePanel.__index = CorePanel
 local CONTENT_HEIGHT = 186
 local TEXT_COLOUR = 0xD7C9ADFF
 
--- Create the debug checkbox, geometry reset, and status message.
 function CorePanel.new(parent, options)
     local preferences = options ~= nil and options.preferences or {}
     local self = setmetatable({
@@ -51,14 +50,13 @@ function CorePanel.new(parent, options)
     return self
 end
 
--- Show an error if saving failed; otherwise hide the message.
 function CorePanel:ShowResult(saved, reason, defaultMessage)
     self.status.rgba = 0xE57373FF
     self.status.content = saved and "" or tostring(reason or defaultMessage)
     self.status.hidden = saved == true
 end
 
--- Confirm the reset and explain when the fresh layout will be measured.
+-- Show when the reset will take effect.
 function CorePanel:ResetGeometry()
     if self.destroyed then return false end
     local cleared, reason = self.options.onResetGeometry()
@@ -71,7 +69,7 @@ function CorePanel:ResetGeometry()
     return cleared, reason
 end
 
--- Save the debug setting; undo the checkbox change if saving fails.
+-- Undo the checkbox change if saving fails.
 function CorePanel:ChangeDebug(enabled)
     if self.destroyed then return false end
     local saved, reason = self.options.onChangeDebug(enabled)
@@ -84,8 +82,7 @@ function CorePanel:ChangeDebug(enabled)
     return saved, reason
 end
 
--- Remove the controls before the game removes their settings area.
--- The checkbox removes its tooltips; the view removes the status text.
+-- Remove controls before the game removes their parent.
 function CorePanel:Destroy()
     if self.destroyed then return end
     self.destroyed = true

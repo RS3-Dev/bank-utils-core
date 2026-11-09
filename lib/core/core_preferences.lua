@@ -3,17 +3,15 @@ local Config = require("lib/core/config")
 local PlainData = require("lib/features/extensions/plain_data")
 local CorePreferences = {}
 
--- Keep the saved icon order for unloaded plugins too.
+-- Keep the order of unloaded plugins too.
 local MAX_RAIL_ORDER = 64
--- Match the plugin ID length allowed during registration.
 local ID_LENGTH = 64
 
--- Create the default settings.
 function CorePreferences.defaults()
     return { enableDebug = false, railOrder = {} }
 end
 
--- Copy the saved icon order, skipping invalid or duplicate plugin IDs.
+-- Skip invalid or duplicate plugin IDs.
 local function readRailOrder(value)
     local railOrder, seen = {}, {}
     if type(value) ~= "table" then return railOrder end
@@ -27,7 +25,7 @@ local function readRailOrder(value)
     return railOrder
 end
 
--- Load valid saved settings, using defaults for missing or invalid values.
+-- Use defaults for missing or invalid settings.
 function CorePreferences.load()
     local value = CorePreferences.defaults()
     local ok, saved = pcall(function()
@@ -39,7 +37,6 @@ function CorePreferences.load()
     return value
 end
 
--- Save settings and report whether saving succeeded.
 function CorePreferences.save(value)
     local ok, saved = pcall(function()
         return PersistentDB:SetStructuredData(Config.PREFERENCES_KEY,
