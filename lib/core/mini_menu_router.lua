@@ -55,7 +55,7 @@ function MiniMenuRouter:PageSlotAtPointer()
     return bankView.pageDisplay:EntryAtPosition(bankView.itemHover.drawnPageItems, pageArea, localX, localY)
 end
 
--- Find the hovered slot, falling back to the mouse position.
+-- Find the slot for the hovered stack, or check the mouse position.
 function MiniMenuRouter:PageMenuSlot(menuItem)
     local bankView = self.session.layout
     local hoveredStack = bankView.itemHover.hoveredBankStack
@@ -103,7 +103,7 @@ local function hasPluginDefaultAction(menu)
     return top ~= nil and top.actionEntryType == MiniMenuEntryType.PLUGIN
 end
 
--- Block bank actions on hidden or sidebar-covered stacks.
+-- Block bank actions on stacks hidden or covered by the sidebar.
 function MiniMenuRouter:HasNativeInput(menuItem)
     local bankView = self.session.layout
     if not self.session.inGame or not self.options.bankIsOpen()
@@ -112,7 +112,7 @@ function MiniMenuRouter:HasNativeInput(menuItem)
         or bankView.itemHover:IsBankStackMovedAside(menuItem.id, menuItem.categoryID,
             menuItem.dynamicID) then return false end
     if bankView.shownPage ~= nil then
-        -- The hovered stack's placeholder flag shows whether it is empty.
+        -- The hovered stack's placeholder field tells us whether it is empty.
         return self:PageMenuSlot(menuItem) ~= nil and bankView.itemHover.hoveredBankStack.placeholder ~= true
     end
     local entry = self:NativeEntry(menuItem)

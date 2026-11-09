@@ -157,7 +157,7 @@ function SidebarHost:UpdateLayoutControls()
     self.tabRail:SetTabs(self.extensionTabs, self.sidebarMode)
 end
 
--- Select sidebar content, or open the page if the tab has no column.
+-- Show the sidebar content, or open the page if there is none.
 function SidebarHost:SetSidebarMode(selectedTabID)
     local tab = self:FindSidebarTab(selectedTabID)
     if tab ~= nil and tab.mount == nil then

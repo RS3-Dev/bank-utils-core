@@ -1,4 +1,4 @@
--- Manage plugin registrations, sidebar content, and pages.
+-- Manage plugins, sidebar content, and pages.
 
 local BankInterface = require("lib/core/bank_interface")
 local BankItemIndex = require("lib/bank/bank_item_index")
@@ -101,7 +101,7 @@ function PluginPages.new(bankView, options)
         publishPending = false,
         closed = false,
     }, PluginPages)
-    -- Unique listener names prevent reloads from removing another service's listeners.
+    -- Unique event names prevent reloads from removing another session's event handlers.
     local eventSuffix = ":" .. string.match(tostring(self), "%x+$")
     self.refreshEvent = REFRESH_EVENT .. eventSuffix
     self.notifyEvent = NOTIFY_EVENT .. eventSuffix
@@ -193,7 +193,7 @@ end
 function PluginPages:LeaveRemovedPage()
     local page = self.layout.shownPage
     if page == nil or self:IsLive(page.owner) then return end
-    -- Leave the page next tick, after the current change finishes.
+    -- Leave the page on the next game update, after the current change finishes.
     if self:IsChanging() then
         self:QueueRefresh()
         return
@@ -207,7 +207,7 @@ function PluginPages:RegisterOwner(description)
     if self.pluginCallbacks > 0 then return nil, "busy" end
     local registration, problem = readRegistration(description)
     if registration == nil then return nil, "invalid", problem end
-    -- Publish tabs once to preserve the selected column.
+    -- Update tabs once so the selected sidebar content stays open.
     local previous = self.owners[registration.id]
     if previous ~= nil then self:DisposeOwner(previous, true) end
     local extension = { id = registration.id, name = registration.name, icon = registration.icon, callbacks = registration,
@@ -221,7 +221,7 @@ function PluginPages:RegisterOwner(description)
             draw = function(view) return self:RunPluginCallback(extension, "customView", drawView, customView, view) end }
     end
     self.owners[extension.id] = extension
-    -- Wait until the plugin has its handle before drawing its sidebar.
+    -- Give the plugin its Core functions before drawing its sidebar.
     if extension.icon ~= nil or (previous ~= nil and previous.icon ~= nil) then
         self.publishPending = true
         self:QueueRefresh()
@@ -264,7 +264,7 @@ function PluginPages:SetPage(extension, description)
     if page == nil then return false, "invalid", problem end
     -- Pages can override the plugin's drag setting.
     if page.allowNativeDrag == nil then page.allowNativeDrag = extension.callbacks.allowNativeDrag == true end
-    -- Keep the opening ID to preserve scroll.
+    -- Keep the same page opening ID so its scroll position is saved.
     page.owner, page.key = extension, extension.opens
     extension.page = page
     if self:ShownPage(extension) ~= nil then
@@ -390,7 +390,7 @@ function PluginPages:RunPluginCallback(extension, name, action, ...)
     return ok, result
 end
 
--- Queue one bank-close notification per opening.
+-- Send one close notification per bank opening on the next game update.
 function PluginPages:BankClosed()
     if self.closed or not self.layout.active then return end
     for _, extension in pairs(self.owners) do extension.bankClosed = true end
@@ -461,7 +461,7 @@ function PluginPages:DeliverTo(extension)
     end
 end
 
--- Notify live plugins in ID order.
+-- Notify registered plugins in ID order.
 function PluginPages:DeliverChanges()
     local extensionIDs = {}
     for extensionID in pairs(self.owners) do extensionIDs[#extensionIDs + 1] = extensionID end

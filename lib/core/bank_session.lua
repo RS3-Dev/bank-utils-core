@@ -247,7 +247,7 @@ function BankSession:SuspendGameUI()
     self.layout:Restore()
 end
 
--- Attach if the bank is already open.
+-- Connect Core if the bank is already open.
 function BankSession:ResumeGameUI()
     if self.shutDown then return end
     self.inGame = true

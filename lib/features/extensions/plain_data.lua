@@ -1,4 +1,4 @@
--- Check plugin data without running custom table lookups.
+-- Read tables with rawget so checking data cannot run plugin code.
 
 local PlainData = {}
 
@@ -18,7 +18,7 @@ function PlainData.Text(value, limit)
     return trimmed
 end
 
--- Reject gaps, extra keys, and oversized lists.
+-- Reject missing list entries, extra keys, and lists over the size limit.
 function PlainData.Array(value, limit)
     if type(value) ~= "table" then return nil end
     local entries = {}
@@ -36,7 +36,7 @@ function PlainData.Array(value, limit)
     return entries
 end
 
--- Reject control characters and game markup.
+-- Reject control characters (such as line breaks) and game text tag brackets.
 function PlainData.Label(value, limit)
     local text = PlainData.Text(value, limit)
     if text == nil or string.find(text, "[%c<>]") then return nil end
@@ -59,7 +59,7 @@ function PlainData.ObjectNumber(entry)
     return objectID
 end
 
--- Accept game sprite IDs, PrettyUI names, or sprite constant names.
+-- Accept image IDs, PrettyUI icon names, or named game sprite IDs.
 function PlainData.ValidIcon(value)
     if type(value) == "number" then
         return value >= 0 and value <= 0x7FFFFFFF and value % 1 == 0

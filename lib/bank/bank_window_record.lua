@@ -91,7 +91,7 @@ function BankWindowRecord:Clear()
     return true
 end
 
--- Save changes; retry failed saves on attach, close, or shutdown.
+-- Retry failed saves when Core connects to the bank, the bank closes, or Core stops.
 function BankWindowRecord:Save()
     local currentSummary = describeRecord(self.value)
     if not self.persisted or self.value == nil or currentSummary == self.saved then return true end

@@ -1,4 +1,4 @@
--- Build buttons and frames with the native bank appearance
+-- Build buttons and frames that match the bank's appearance.
 
 local NativeUi = require("lib/ui/native_ui")
 local UICoordinates = require("lib/ui/ui_coordinates")
@@ -31,7 +31,7 @@ function BankControls.button(parent, content, action, options)
         end)
     end
 
-    -- Measure pointer scale on hover so clicks work immediately.
+    -- Measure mouse positions on hover to account for the game's display scale.
     UICoordinates.trackPointer(self.root)
     self.root:Subscribe(ui.Hook.ONMOUSEOVER, function(component, hoverX, hoverY)
         UICoordinates.calibratePointer(component, hoverX, hoverY)
@@ -47,7 +47,7 @@ function BankControls.button(parent, content, action, options)
 
     -- Buttons cannot hold children, so decorations sit beside them.
     if self.spriteName ~= nil or self.spriteID ~= nil then
-        -- Use one sprite for every button state.
+        -- Use the same image whether the button is pressed, hovered, or idle.
         self.sprites = self.spriteID ~= nil and { neutral = self.spriteID }
             or prettyui.Sprites.SPRITE_BUTTONS[self.spriteName]
         if self.sprites == nil then
@@ -84,7 +84,7 @@ function NativeButton:_UpdateState()
     end
 end
 
--- Clear hover state when the button changes shape.
+-- Clear the hover effect and tooltip when the button changes shape.
 function NativeButton:StopHover()
     prettyui.Tooltip.unbind(self)
     self.root:Unsubscribe(ui.Hook.ONMOUSEOVER)

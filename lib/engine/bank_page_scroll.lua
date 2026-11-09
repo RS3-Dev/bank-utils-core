@@ -1,4 +1,4 @@
--- Scroll pages and pause hover while the view settles
+-- Pause item hover while the page scrolls.
 
 local Config = require("lib/core/config")
 local BankInterface = require("lib/core/bank_interface")
@@ -29,7 +29,7 @@ function BankPageScroll:MaxScrollY(pageArea)
     return math.max(0, self:ContentHeightForCurrentLayout() - pageArea.height)
 end
 
--- Move the viewport because scrollY is read-only.
+-- Move the visible area because scrollY cannot be changed directly.
 function BankPageScroll:ApplyViewportScroll(viewport, scrollY)
     viewport:SetScrollPos(0, scrollY)
 end
@@ -46,7 +46,7 @@ function BankPageScroll:OnScrollChanged(previousY, newY)
     return true
 end
 
--- Wait a few ticks for scrolling to settle before enabling hover.
+-- Wait a few game updates after scrolling before enabling hover.
 function BankPageScroll:HoldPointerInteractionDuringScroll(scrollChanged)
     if self.scrollInteractionTicks <= 0 then return false end
     self.bankView.itemHover:PauseHoverForScroll()
@@ -56,7 +56,7 @@ function BankPageScroll:HoldPointerInteractionDuringScroll(scrollChanged)
     return true
 end
 
--- Keep the scroll offset in range and pause hover.
+-- Keep scrolling within the page limits and pause hover.
 function BankPageScroll:SetScrollPosition(requestedScrollY, rebuildInteractiveLayers)
     local pageArea = self:ReadPageArea()
     if pageArea == nil then return false end
@@ -101,12 +101,12 @@ function BankPageScroll:UnbindScrollWheel(componentValue)
     componentValue:Unsubscribe(ui.Hook.ONSCROLLWHEEL, ENGINE_SCROLL_HOOK)
 end
 
--- Remove custom scrolling and optionally restore the bank's offset
+-- Remove page scrolling and optionally restore the bank's scroll position.
 function BankPageScroll:DestroyScrollbar(restoreNativeScroll)
     local viewport = restoreNativeScroll and self.nativeScrollY ~= nil
         and component(BANK_ITEMS_CONTAINER_STATIC_ID) or nil
     if viewport ~= nil then
-        -- The viewport may disappear as the bank closes.
+        -- The scroll area may disappear as the bank closes.
         pcall(function() viewport:SetScrollPos(0, self.nativeScrollY) end)
     end
     if self.scrollbarLayer ~= nil then
@@ -129,7 +129,7 @@ function BankPageScroll:RefreshScrollbar(pageArea)
     self.scrollbar:Refresh(math.max(1, self:ContentHeightForCurrentLayout()), pageArea.scrollY)
 end
 
--- Use the measured pointer position; click coordinates have no known origin.
+-- Use the measured mouse position; click events do not say where (0, 0) is.
 local function scrollToPointer(self, track)
     local _, mouseY = UICoordinates.interfaceMousePosition()
     if mouseY == nil then return true end
@@ -189,7 +189,7 @@ local function buildScrollbar(self, height)
                 return true
             end,
         })
-        -- Hover measures the pointer so clicks and drags work immediately.
+        -- Hovering measures mouse position so clicks and drags work immediately.
         for _, part in ipairs({ layer, scrollbar.upArrow, scrollbar.downArrow, scrollbar.track,
             scrollbar.thumb }) do
             self:BindScrollWheel(part)
@@ -205,7 +205,7 @@ local function buildScrollbar(self, height)
     self.scrollbar = scrollbar
 end
 
--- Reuse scroll controls when the viewport changes.
+-- Reuse scroll controls when the visible area changes size.
 function BankPageScroll:CreateScrollbar(pageArea)
     if self.bankView.components.all == nil then return end
     if self.scrollbarLayer == nil then

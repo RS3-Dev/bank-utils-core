@@ -1,4 +1,4 @@
--- Custom tabs use consecutive bank slots; the main tab follows.
+-- Each custom tab uses a block of bank slots; the main tab comes last.
 local NativeTabs = {}
 
 function NativeTabs.Read(entries)

@@ -1,4 +1,4 @@
--- Bank styles, sprites, and scrollbar controls.
+-- Bank styles, images, and scrollbar controls.
 
 local NativeUi = {}
 
@@ -17,11 +17,11 @@ local TRACK_SPRITE = 792
 local THUMB_TOP_SPRITE = 18423
 local THUMB_BOTTOM_SPRITE = 18424
 local THUMB_MIDDLE_SPRITE = 18425
--- Draw decorations above input areas, with arrows on top.
+-- Draw decorations above clickable areas, with arrows on top.
 local PART_ORDER = { "track", "trackSprite", "thumb", "thumbTop", "thumbMiddle", "thumbBottom",
     "upArrow", "downArrow" }
 
--- Fallback IDs for styles missing from the game's lookup.
+-- Use these style IDs if the game does not supply them.
 local STYLE_FALLBACK_IDS = {
     RECT_BLACK = 269,
     BUTTON_PANEL = 318,
@@ -65,7 +65,7 @@ function NativeUi.createScrollbar(parent, options)
     scrollbar.track.stylesheetID = NativeUi.styleID("RECT_BLACK")
     scrollbar.trackSprite = scrollbarSprite(parent, TRACK_SPRITE, true)
     scrollbar.thumb = inputRectangle(parent)
-    -- Decorations let clicks reach the thumb.
+    -- Decorations let clicks reach the draggable part of the scrollbar.
     scrollbar.thumbTop = scrollbarSprite(parent, THUMB_TOP_SPRITE, true)
     scrollbar.thumbMiddle = scrollbarSprite(parent, THUMB_MIDDLE_SPRITE, true)
     scrollbar.thumbBottom = scrollbarSprite(parent, THUMB_BOTTOM_SPRITE, true)
@@ -84,7 +84,7 @@ function Scrollbar:TrackHeight()
     return math.max(1, self.height - ARROW_HEIGHT * 2)
 end
 
--- Match the thumb to the visible share of content.
+-- Size the scrollbar handle to show how much of the page is visible.
 function Scrollbar:ThumbHeight(contentHeight)
     if contentHeight <= self.height then return self:TrackHeight() end
     return math.max(MIN_THUMB_HEIGHT,
@@ -102,7 +102,7 @@ local function thumbOffset(self, contentHeight, scrollY)
     return math.floor(scrollY / maxScrollY * travel + 0.5)
 end
 
--- Centre the thumb on a point in the track.
+-- Centre the scrollbar handle on the clicked position.
 function Scrollbar:ScrollFromTrack(trackY, contentHeight)
     local maxScrollY = contentHeight - self.height
     local travel = self:ThumbTravel(contentHeight)

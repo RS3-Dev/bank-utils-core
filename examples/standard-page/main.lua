@@ -7,12 +7,12 @@ local page = {
     },
 }
 
--- Use your plugin's own ID, display name and rail icon here.
+-- Use your plugin's own ID, display name, and sidebar icon here.
 local registration = { id = "examples.standard-page", name = "Standard page", icon = "STAR" }
 local extension
 -- When your items change, call extension:SetPage(page) again.
 
--- Remove this plugin's registration and displayed content
+-- Remove this plugin from Core and clear its content.
 local function disconnect()
     if extension ~= nil then extension:Dispose() end
     extension = nil
@@ -36,7 +36,7 @@ function PluginDependencyUpdate(event)
     if event.enabled then connect() else disconnect() end
 end
 
--- Release the registration when your plugin unloads
+-- Remove the plugin from Core when it unloads.
 function PluginShutdown()
     disconnect()
 end

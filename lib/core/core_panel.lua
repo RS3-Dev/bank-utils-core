@@ -1,4 +1,4 @@
--- Show Core's debug logging and bank geometry settings.
+-- Show Core's debug logging and window layout settings.
 
 local CorePanel = {}
 CorePanel.__index = CorePanel

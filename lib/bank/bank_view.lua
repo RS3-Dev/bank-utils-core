@@ -35,7 +35,7 @@ function BankView.new(options)
         sidebarMode = nil,
         -- Plugin tabs in the player's saved order.
         extensionTabs = {},
-        -- The session supplies saved tab order access.
+        -- The session supplies functions to load and save tab order.
         readRailOrder = options.readRailOrder or function() return {} end,
         saveRailOrder = options.saveRailOrder or function() return false end,
         -- Identifies this bank opening for notifications.
@@ -59,7 +59,7 @@ function BankView:Changed(itemsChanged)
     self.onChange()
 end
 
--- Keep the mounted column's overlay above the page and the sidebar
+-- Keep the sidebar plugin's popups above the page and sidebar.
 function BankView:RaiseMountOverlays()
     if self.tabMount ~= nil then self.tabMount:RaiseOverlay() end
 end
@@ -75,7 +75,7 @@ function BankView:MountAtPointer()
     return nil
 end
 
--- Share one set of page items between drawing and input.
+-- Use the same item list to draw the page and handle clicks.
 function BankView:BuildPageItems()
     local entries = self.pageState:GetVisibleItems(self.pageDisplay:GridCellInset())
     if self.customView ~= nil then self.customView:Measure(entries) end
@@ -89,7 +89,7 @@ local function revokeCustomView(self)
     if view ~= nil then view:Revoke() end
 end
 
--- End the rendered page, then remove the sidebar
+-- Close the displayed page, then remove the sidebar.
 function BankView:DestroyRail()
     self.itemHover:RemovePageInput()
     self.itemHover:RestoreBankItemPositions()
@@ -117,13 +117,13 @@ local function layOutPage(self)
     return matchCount
 end
 
--- Fit the viewport and custom content within the page height limit.
+-- Fit the visible area and plugin content within the page height limit.
 local function viewHeight(view, requested, viewportHeight)
     return math.ceil(math.min(PageLayout.MAX_HEIGHT,
         math.max(viewportHeight, requested or 0, view:BoundBottom())))
 end
 
--- Draw the plugin's view and place real stacks beneath its bound items.
+-- Draw the plugin's page and put real bank stacks beneath its linked images.
 local function drawCustomView(self)
     local page, pageState, pageDisplay = self.shownPage, self.pageState, self.pageDisplay
     -- Share this bank read with the plugin while it draws.
@@ -142,7 +142,7 @@ local function drawCustomView(self)
     if not drawn or page.draw == nil then error("the extension's view could not be drawn", 0) end
     local columns = BankGrid.ColumnCount(bankItemLayer.width)
     local matchCount = pageState:SetView(view:Place(viewHeight(view, height, pageArea.height)), columns)
-    -- Set the content height before measuring bound items.
+    -- Set the content height before measuring linked item images.
     pageDisplay:ShowPageLayers({}, {})
     local pageItems = self:BuildPageItems()
     -- Save positions before moving any stacks.
@@ -151,7 +151,7 @@ local function drawCustomView(self)
     return matchCount
 end
 
--- End the old drawing, then draw the page and set up its input.
+-- End the old drawing, then draw the page and set up mouse controls.
 local function drawPage(self)
     revokeCustomView(self)
     if self.shownPage.draw ~= nil then return drawCustomView(self) end
@@ -171,7 +171,7 @@ local function rebuildPage(self)
     return drawPage(self)
 end
 
--- Switch pages, keeping scroll when redrawing the same opening.
+-- Keep the scroll position when redrawing a page that is already open.
 local function showPage(self, page)
     if page ~= nil and self:IsPresetViewOpen() then
         debugLog("Bank Core pages are unavailable while the preset selector is open")
@@ -242,7 +242,7 @@ function BankView:ShowPage(page)
     return duringTransition(self, showPage, page)
 end
 
--- Track the native tab, and leave a page when the bank moves off All Items
+-- Close the plugin page when the player leaves the All Items tab.
 function BankView:SetNativeViewAll(enabled)
     enabled = enabled == true
     if enabled and self.nativeViewAll then return end
@@ -251,7 +251,7 @@ function BankView:SetNativeViewAll(enabled)
     self:Changed(false)
 end
 
--- Keep slot order; custom views redraw to show updated quantities.
+-- Keep slot order; plugin drawings redraw to show updated quantities.
 function BankView:RefreshPageItems()
     if self.shownPage == nil or not self.pageState.active or self.customView ~= nil then return false end
     self.itemHover:PausePageInput()
@@ -289,7 +289,7 @@ function BankView:RefreshShownPage(forceRebuild)
     return duringTransition(self, refreshPage, forceRebuild)
 end
 
--- Pause hover while rows rewrap to avoid switching the hovered item.
+-- Pause hover while rearranging rows so the item under the mouse cannot change.
 local function reflowPage(self)
     if self.shownPage == nil then return false end
     rebuildPage(self)
@@ -302,7 +302,7 @@ function BankView:ReflowShownPage()
     return duringTransition(self, reflowPage)
 end
 
--- Update changed bindings; redraw if their bank data is stale.
+-- Update changed item links; redraw if their bank data is out of date.
 local function rebindView(self)
     local view = self.customView
     if view == nil or not view.changed then return false end
@@ -317,9 +317,9 @@ function BankView:RebindShownPage()
     return duringTransition(self, rebindView)
 end
 
--- Refresh after native inventory changes
+-- Refresh after the bank items change.
 function BankView:HandleInventoryUpdate()
-    -- Bank data stays stale until the rebuild rereads it.
+    -- Bank data stays out of date until the page rebuild reads it again.
     if self.shownPage ~= nil then self.pageState.stale = true end
     self:Changed(true)
     if self.shownPage == nil then
@@ -328,7 +328,7 @@ function BankView:HandleInventoryUpdate()
     end
     self.itemHover:BlockPageInput()
     local hasHoveredStack = self.itemHover:HasHoveredBankStack()
-    -- Wait a tick for new bank items to settle.
+    -- Wait one game update for new bank items to settle.
     self.itemHover:RefreshAfterBankRebuild(not hasHoveredStack)
 end
 

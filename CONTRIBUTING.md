@@ -7,7 +7,8 @@ native bank items. Feature-specific behavior belongs in the feature plugin.
   and how other plugins would use it.
 - Keep pull requests focused. Avoid unrelated rewrites, new dependencies and
   abstractions that make a simple change harder to follow.
-- Use clear names and plain-language comments where the reason is not obvious.
+- Use clear names and short comments that a new junior developer can follow.
+  Explain necessary technical terms in plain language; avoid repeating the code.
 - AI assistance is welcome, but you must understand and review everything you
   submit. Do not submit code you cannot explain or maintain.
 - Try your changes in RuneScape. For input or layout changes, check bank opening

@@ -1,4 +1,4 @@
--- Align mouse pixels with game UI positions.
+-- Match mouse positions to the game interface at any display scale.
 
 local UICoordinates = {}
 
@@ -12,7 +12,7 @@ local function interfaceScale()
     return scalePercent > 0 and scalePercent / 100 or 1
 end
 
--- Measure mouse scaling from the positions reported during hover
+-- Compare mouse and control positions to measure the game's display scale.
 function UICoordinates.calibratePointer(component, x, y)
     if type(x) ~= "number" or type(y) ~= "number" then return false end
     local mousePixels, componentPosition = Mouse.GetPosition(), component.xyGlobal
@@ -27,7 +27,7 @@ function UICoordinates.calibratePointer(component, x, y)
     return true
 end
 
--- Update mouse scaling while hovering this component
+-- Update the mouse position measurement while hovering this control.
 function UICoordinates.trackPointer(component)
     component:Subscribe(ui.Hook.ONMOUSEREPEAT, POINTER_HOOK, function(component, x, y)
         UICoordinates.calibratePointer(component, x, y)
@@ -52,7 +52,7 @@ function UICoordinates.relativePosition(component, ancestor)
     return x, y
 end
 
--- Find the visible area within the root, accounting for scrolling and clipping.
+-- Find the part of a control still visible inside the given container.
 function UICoordinates.visibleArea(component, root)
     if component.visibleGlobal == false then return nil end
     local left, top, right, bottom = 0, 0, component.width, component.height
@@ -86,9 +86,9 @@ function UICoordinates.absolutePosition(component)
     return x, y
 end
 
--- Convert mouse pixels to the game's interface units
+-- Adjust mouse positions to match the game's display scale.
 function UICoordinates.interfaceMousePosition()
-    -- Mouse positions are unscaled pixels.
+    -- Mouse positions do not include the game's display scaling.
     local position = Mouse.GetPosition()
     if position == nil then return nil, nil end
     local scale = interfaceScale()

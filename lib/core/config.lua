@@ -3,7 +3,7 @@
 local Config = {
     CORE_REF = "bankcore",
     PREFERENCES_KEY = "bankcore:settings:v1",
-    -- Saved window changes for recovery.
+    -- Saved changes that let Core restore the window after a crash.
     WINDOW_KEY = "bankcore:window:v1",
     BANK_INTERFACE_ID = 517,
     BANK_INVENTORY_ID = 95,

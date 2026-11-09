@@ -1,4 +1,4 @@
--- Draw the sidebar's tab rail and content column
+-- Draw the sidebar's icon strip and content column.
 
 local Config = require("lib/core/config")
 local BankControls = require("lib/ui/bank_controls")
@@ -34,7 +34,7 @@ function SidebarFrame.Create(bankView, parent, height, x, y, actions)
     bankView.railBackground.isTiling = true
     bankView.railBackground.clickthrough = true
 
-    -- Positive outlines draw inside the bounds.
+    -- A positive outline size draws the border inside the panel.
     bankView.railFrame = BankControls.frame(bankView.rail, Theme.FRAME)
     bankView.railFrame:SetSize(0, 0, 1.0, 1.0)
 end

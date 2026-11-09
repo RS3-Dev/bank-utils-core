@@ -65,7 +65,7 @@ function SidebarTabRail.new(parent, options)
     self.root:SetPos(self.x, self.y)
     self.root:SetSize(TAB_SIZE, self.height)
     self.root.clickthrough = false
-    -- Keep tooltips outside the rail so they are not clipped.
+    -- Draw tooltips outside the icon strip so they are not cut off.
     prettyui.Tooltip.registerContext(self.root, parent, function(target)
         return UICoordinates.relativePosition(target, parent)
     end)
@@ -284,7 +284,7 @@ function SidebarTabRail:ArrowAt(y)
     return nil
 end
 
--- Find the drop position and its visible gap.
+-- Find where the dragged icon will go and where to draw the drop marker.
 function SidebarTabRail:DropTarget(y)
     local view = self.view
     if y < view.top or self:ArrowAt(y) ~= nil then return nil end
@@ -335,13 +335,13 @@ function SidebarTabRail:BeginDrag()
     end
     button:StopHover()
     local cover = button.root
-    -- Tooltip removal resets input settings; override them afterward.
+    -- Set mouse controls after removing the tooltip, which restores the old settings.
     cover.clickthrough = false
     cover.alpha = 0
     cover:SetPos(0, 0)
     cover:SetSize(TAB_SIZE, self.height)
     button.icon.hidden = true
-    -- Cancel outside the rail, where release events may not arrive.
+    -- Cancel outside the icon strip, where mouse release events may not arrive.
     cover:Subscribe(ui.Hook.ONMOUSELEAVE, function()
         if not self:Contains(self:Pointer()) then self:CancelDrag() end
         return true
@@ -356,7 +356,7 @@ function SidebarTabRail:BeginDrag()
     self:Draw()
 end
 
--- Move the drag preview; scroll once per arrow visit.
+-- Move the dragged icon preview; scroll once when the mouse reaches an arrow.
 function SidebarTabRail:UpdateDrag(x, y)
     local gesture = self.gesture
     if not self:Contains(x, y) then
@@ -422,7 +422,7 @@ function SidebarTabRail:Release(button)
     self:Draw()
 end
 
--- Clear the gesture and report whether it was a drag.
+-- Clear the press or drag and report whether dragging had started.
 function SidebarTabRail:StopGesture()
     local gesture = self.gesture
     self.gesture = nil

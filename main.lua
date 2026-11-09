@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: BSD-2-Clause
 -- Copyright (C) 2026 Bank Core contributors
 
--- Start Core and publish its plugin API.
+-- Start Core and make its functions available to other plugins.
 
 -- Keep the debug setting across failed shutdowns.
 local DebugLog = require("lib/core/debug_log")
@@ -12,7 +12,7 @@ if previous ~= nil then
     local ok, message = pcall(function() previous:Shutdown() end)
     if not ok then debugLog("Bank Core could not fully stop the previous reload: ", message) end
 end
--- Reloads share one Lua state.
+-- Reloading keeps the existing Lua globals and loaded modules.
 if rawget(_G, "__bankcore_session") == previous then
     _G.__bankcore_session = nil
 end
@@ -23,7 +23,7 @@ end
 previous = nil
 pcall(function() collectgarbage("collect") end)
 
--- Reload these modules; keep this list in sync with lib/.
+-- Reload these modules; update this list when lib/ changes.
 if package ~= nil and package.loaded ~= nil then
     for _, moduleName in ipairs({
         "lib/bank/bank_item_hover",
@@ -68,7 +68,7 @@ local session = BankSession.new()
 _G.__bankcore_session = session
 session:Start()
 
--- Fallback API for plugins without client-provided access.
+-- Let other plugins use Core's functions.
 local api = session.publicAPI
 _G.__bankcore_api = api
 

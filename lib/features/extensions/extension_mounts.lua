@@ -9,7 +9,7 @@ Mount.__index = Mount
 
 local CALLBACKS = { mount = true, resize = true, unmount = true }
 
--- Only the mount callback is required.
+-- Only the mount function, which creates sidebar controls, is required.
 function ExtensionMounts.Read(callbacksInput)
     if type(callbacksInput) ~= "table" or not PlainData.HasOnlyFields(callbacksInput, CALLBACKS) then
         return nil, "column must be a table of mount, resize, and unmount"
@@ -77,7 +77,7 @@ function Mount:Open(hostParent, window, bounds)
     return self.state == "mounted"
 end
 
--- Tell the plugin about resizes, or redraw it if no resize callback exists.
+-- Call the resize function if supplied; otherwise redraw the sidebar content.
 function Mount:Resize(bounds)
     if self.state ~= "mounted" then return end
     local previous = self.bounds

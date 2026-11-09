@@ -1,4 +1,4 @@
--- Draw page items and headings where clicks reach them.
+-- Draw item images and headings for plugin pages.
 
 local Config = require("lib/core/config")
 local BankInterface = require("lib/core/bank_interface")
@@ -36,7 +36,7 @@ function BankPageDisplay.new(bankView)
         contentLayer = nil,
         -- Popups above the window.
         viewOverlay = nil,
-        -- Drawn items and their sprites, in page order.
+        -- Page items and their images, in the order shown.
         items = {},
         sprites = {},
         pageArea = nil,
@@ -45,13 +45,13 @@ function BankPageDisplay.new(bankView)
         scrollbarBackdrop = nil,
         scrollbar = nil,
         scrollDragStart = nil,
-        -- The page opening that owns the saved scroll position.
+        -- Which page opening the saved scroll position belongs to.
         scrollOwner = nil,
         scrollKey = nil,
         nativeScrollY = nil,
         scrollInteractionTicks = 0,
         visualSyncing = false,
-        -- Wait for width and custom height to settle before redrawing.
+        -- Wait for resizing to finish before redrawing.
         reflowWidth = nil,
         reflowHeight = nil,
         reflowTicks = 0,
@@ -102,7 +102,7 @@ function BankPageDisplay:ViewGeometry()
         stepX = GRID_STEP, stepY = GRID_STEP }
 end
 
--- Apply supplied sprite settings; keep the rest.
+-- Apply the supplied image settings; leave other settings unchanged.
 local function applyAppearance(sprite, pageItem)
     if pageItem.quantity ~= nil then sprite.associatedObjectQuantity = pageItem.quantity end
     if pageItem.quantityMode ~= nil then sprite.associatedObjectQuantityMode = pageItem.quantityMode end
@@ -128,7 +128,7 @@ function BankPageDisplay:ShowItemName(pageItem, pageArea)
     if self.nameAnchor == nil then
         self.nameAnchor = ui.Layer.new(parent)
         self.nameTooltip = prettyui.Tooltip.attach(self.nameAnchor, parent, name)
-        -- The tooltip anchor must let clicks through.
+        -- The component that positions the tooltip must let clicks through.
         self.nameAnchor.clickthrough = true
     elseif self.nameText ~= name then
         self.nameTooltip:SetText(name)
@@ -162,7 +162,7 @@ local function destroyPageLayers(self)
     if overlay ~= nil then pcall(function() overlay:Destroy() end) end
 end
 
--- Stop updates, remove the page, and restore native scrolling
+-- Stop updates, remove the page, and restore the bank's scrolling.
 function BankPageDisplay:DestroyRuntimeSprites()
     self:StopVisualSync()
     self:DestroyItemName()
@@ -177,7 +177,7 @@ function BankPageDisplay:DestroyRuntimeSprites()
     self:DestroyScrollbar(true)
 end
 
--- Content must be at least as tall as the viewport.
+-- Content must be at least as tall as the visible area.
 function BankPageDisplay:FitContent(pageArea)
     if self.contentViewport == nil then return end
     local contentHeight = math.max(pageArea.height, self:ContentHeightForCurrentLayout())
@@ -187,7 +187,7 @@ function BankPageDisplay:FitContent(pageArea)
     self.contentLayer:SetSize(pageArea.itemLayer.width, contentHeight)
 end
 
--- Align page images and input targets with the current scroll position
+-- Keep item images and their clickable areas aligned while scrolling.
 function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, requestedScrollY)
     local bankView = self.bankView
     if self.layer == nil or bankView.shownPage == nil then return false, false end
@@ -197,7 +197,7 @@ function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, reque
     local observedScrollY = pageArea.scrollY
     local targetScrollY = requestedScrollY
     if targetScrollY == nil then
-        -- Bank actions can briefly reset our scroll offset.
+        -- Bank actions can briefly reset our scroll position.
         targetScrollY = self.scrollY
     end
     if targetScrollY == nil then targetScrollY = observedScrollY end
@@ -205,7 +205,7 @@ function BankPageDisplay:UpdateListItemPositions(rebuildInteractiveLayers, reque
     if targetScrollY ~= observedScrollY then
         self:ApplyViewportScroll(pageArea.viewport, targetScrollY)
     end
-    -- Use the scroll offset the bank actually accepted.
+    -- Use the scroll position the bank actually accepted.
     pageArea.nativeScrollY = pageArea.viewport.scrollY
     pageArea.scrollY = targetScrollY
     local previousPageArea = self.pageArea
@@ -278,7 +278,7 @@ function BankPageDisplay:StartVisualSync()
             bankView.itemHover:BlockPageInput()
             return
         end
-        -- Refresh changed bindings once per tick.
+        -- Update changed item links once per game update.
         local view = bankView.customView
         if view ~= nil and view.changed then
             bankView:RebindShownPage()
@@ -291,7 +291,7 @@ function BankPageDisplay:StartVisualSync()
         if pageAreaChanged then
             bankView.itemHover:RecordBankItemPositions()
         end
-        -- Rewrapping already reset the width check.
+        -- Rearranging the rows already reset the width check.
         if self:ReflowSettledWidth() then return end
         bankView.itemHover:FollowNativeScroll()
         if scrollChanged then
@@ -430,10 +430,10 @@ function BankPageDisplay:CreateRuntimeSprites(pageItems)
     self:ShowPageLayers(pageItems, sprites)
 end
 
--- Refresh sprites in place unless their size changed.
+-- Update item images without redrawing, unless their size changed.
 function BankPageDisplay:RefreshRuntimeSprites(pageItems)
     if #pageItems ~= #self.items then return false end
-    -- Check all matches before changing any sprites.
+    -- Check all matches before changing any images.
     for index, drawnItem in ipairs(self.items) do
         local pageItem = pageItems[index]
         if pageItem.layoutKey ~= drawnItem.layoutKey or pageItem.objectID ~= drawnItem.objectID
@@ -472,7 +472,7 @@ function BankPageDisplay:UpdatePlaceholder(item, instanceKey)
     return placeholder
 end
 
--- Find the item under the pointer; the last bound item wins overlaps.
+-- For overlapping items, the last one linked gets the mouse clicks.
 function BankPageDisplay:EntryAtPosition(pageItems, pageArea, x, y)
     x = tonumber(x)
     y = tonumber(y)

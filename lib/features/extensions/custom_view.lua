@@ -9,20 +9,20 @@ local UICoordinates = require("lib/ui/ui_coordinates")
 local CustomView = {}
 CustomView.__index = CustomView
 
--- Create a drawing context, valid until the view closes or redraws.
+-- Give this drawing access to Core until it closes or redraws.
 function CustomView.new(parent, overlay, width, height, scrollY, actions)
     local self = setmetatable({
         parent = parent,
         width = width,
         height = height,
         actions = actions,
-        -- Bindings in drawing order, plus a lookup by component.
+        -- Item links in creation order, also indexed by their UI component.
         bindings = {},
         byElement = {},
         bound = 0,
         nextID = 1,
         live = true,
-        -- Refresh item input when bindings change.
+        -- Update clickable areas when item links change.
         changed = false,
     }, CustomView)
     self.context = {
@@ -38,7 +38,7 @@ function CustomView.new(parent, overlay, width, height, scrollY, actions)
     return self
 end
 
--- Only accept readable components inside this view.
+-- Only accept components we can still read inside this view.
 function CustomView:Contains(element)
     local elementType = type(element)
     if (elementType ~= "userdata" and elementType ~= "table") or element == self.parent then return false end
@@ -46,13 +46,13 @@ function CustomView:Contains(element)
     return read and x ~= nil
 end
 
--- Restore the component's original click-through setting.
+-- Restore whether clicks pass through this component.
 local function restoreClickthrough(binding)
     if binding.clickthrough == true then return end
     pcall(function() binding.element.clickthrough = binding.clickthrough end)
 end
 
--- Rebinding keeps the ID; changing items releases the old stack.
+-- Linking the same component again keeps its ID; a new item releases the old stack.
 function CustomView:Bind(element, objectID)
     if not self.live then return nil, "stale" end
     local number = PlainData.ObjectNumber(objectID)
@@ -84,7 +84,7 @@ function CustomView:Bind(element, objectID)
     return binding.id
 end
 
--- Stop clicks immediately; rebuild input next tick.
+-- Stop clicks now; update clickable areas on the next game update.
 function CustomView:Release(binding)
     local entry = binding.entry
     binding.entry = nil
@@ -110,7 +110,7 @@ function CustomView:Geometry()
     return self.actions.geometry()
 end
 
--- Disable old drawing calls and restore click-through settings.
+-- Disable the old drawing and restore how its components handle clicks.
 function CustomView:Revoke()
     if not self.live then return end
     self.live = false
@@ -139,7 +139,7 @@ function CustomView:Place(height)
     return { slots = slots, headings = {}, members = members, height = height }
 end
 
--- Find the lowest visible edge of bound items.
+-- Find the bottom edge of the lowest linked item image.
 function CustomView:BoundBottom()
     local bottom = 0
     for _, binding in ipairs(self.bindings) do
@@ -149,7 +149,7 @@ function CustomView:BoundBottom()
     return bottom
 end
 
--- Keep hidden items bound; unbind destroyed or removed components.
+-- Keep hidden item links, but remove links to components that no longer exist.
 local function measure(self, entry, rootWidth, rootHeight)
     local binding = entry.binding
     if not binding.active or binding.objectID ~= entry.objectID then return false end

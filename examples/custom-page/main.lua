@@ -5,12 +5,12 @@ local items = {
 }
 local extension
 
--- Draw your UI, then bind its item pictures
+-- Draw your controls, then link each item picture to a bank item.
 local function drawPage(view)
     local panel = ui.Layer.new(view.parent)
     panel:SetPos(16, 16)
     panel:SetSize(view.width - 32, 160)
-    panel.clickthrough = true -- Let input reach Core beneath the pictures.
+    panel.clickthrough = true -- Let clicks reach Core beneath the pictures.
 
     local label = ui.Text.new(panel)
     label:SetPos(8, 8)
@@ -36,7 +36,7 @@ local registration = {
 }
 -- When your layout data changes, call extension:Refresh() to draw it again.
 
--- Remove this plugin's registration and displayed content
+-- Remove this plugin from Core and clear its content.
 local function disconnect()
     if extension ~= nil then extension:Dispose() end
     extension = nil
@@ -59,7 +59,7 @@ function PluginDependencyUpdate(event)
     if event.enabled then connect() else disconnect() end
 end
 
--- Release the registration when your plugin unloads
+-- Remove the plugin from Core when it unloads.
 function PluginShutdown()
     disconnect()
 end

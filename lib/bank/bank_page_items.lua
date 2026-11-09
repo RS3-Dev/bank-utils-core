@@ -22,7 +22,7 @@ function BankPageItems.new()
     return self
 end
 
--- Clear page data without moving any native items
+-- Clear page data without moving real bank items.
 function BankPageItems:Restore()
     self.active = false
     self.bankItems = {}
@@ -77,12 +77,12 @@ function BankPageItems:GetLayoutSections()
     return self.view ~= nil and self.view.headings or {}
 end
 
--- Unknown quantities count as stocked, but cannot receive input yet.
+-- Treat unknown quantities as in stock, but block clicks until they can be read.
 local function isPlaceholder(bankItem)
     return bankItem.quantity ~= nil and bankItem.quantity <= 0
 end
 
--- Group by item ID, stocked first, preserving bank order.
+-- Group by item ID, in bank order, with empty placeholders last.
 local function groupStacksByObject(bankItems)
     local stockedStacksByObject, placeholdersByObject = {}, {}
     for _, bankItem in ipairs(bankItems) do
@@ -102,7 +102,7 @@ local function groupStacksByObject(bankItems)
     return stockedStacksByObject
 end
 
--- Shared stacks serve every copy; other items use separate stacks.
+-- Repeated items share a bank stack if stackable; otherwise use separate stacks.
 local function stackForSlot(stacksByObject, sharedStacks, slot)
     local objectStacks = stacksByObject[slot.objectID]
     if objectStacks == nil then return nil end
@@ -155,14 +155,14 @@ local function pageItem(self, slot, quantity, bankItem, insetX, insetY)
     }
 end
 
--- Build page items in layout order; click areas include the image insets.
+-- Build items in page order, with clickable areas larger than their images.
 function BankPageItems:GetVisibleItems(insetX, insetY)
     local items = {}
     if self.view == nil then return items end
     local stacksByObject = groupStacksByObject(self.bankItems)
     for _, slot in ipairs(self.view.slots) do
         local bankItem = stackForSlot(stacksByObject, self.sharedStacks, slot)
-        -- Keep unknown quantities as shown; missing stacks show none held.
+        -- Keep unknown quantities as shown; show zero for missing stacks.
         local quantity = 0
         if bankItem ~= nil then quantity = bankItem.component.associatedObjectQuantity end
         items[#items + 1] = pageItem(self, slot, quantity, bankItem, insetX, insetY)
@@ -273,7 +273,7 @@ function BankPageItems:SetView(view, columns)
     return matchCount
 end
 
--- Lay out the page; missing stacks appear as ghost images.
+-- Lay out the page; missing stacks appear as faded item images.
 function BankPageItems:ApplyLayout(place)
     local bankItemLayer = self:ReadBank()
     if bankItemLayer == nil then return false, 0 end
