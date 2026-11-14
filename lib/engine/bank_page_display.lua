@@ -274,6 +274,11 @@ function BankPageDisplay:StartVisualSync()
             bankView:ShowPage(nil)
             return
         end
+        -- The game can switch tabs itself, without a menu click.
+        if bankView:DetectNativeViewAll() == false then
+            bankView:SetNativeViewAll(false)
+            return
+        end
         if bankView.itemHover.dropRefreshPending then
             bankView.itemHover:BlockPageInput()
             return

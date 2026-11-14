@@ -119,7 +119,10 @@ end
 
 function PluginPages:ViewAll()
     local bankView = self.layout
-    return bankView.nativeViewAll or bankView:DetectNativeViewAll() == true
+    -- Check the tab itself first, the saved value misses tab changes made by the game.
+    local detected = bankView:DetectNativeViewAll()
+    if detected == nil then detected = bankView.nativeViewAll end
+    return detected == true
 end
 
 -- Explain why the page cannot open, or return nil.
