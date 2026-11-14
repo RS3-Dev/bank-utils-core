@@ -177,7 +177,8 @@ local function showPage(self, page)
         debugLog("Bank Core pages are unavailable while the preset selector is open")
         return false
     end
-    if page ~= nil and not self.nativeViewAll then
+    -- Check the tab itself, the saved value misses tab changes made by the game.
+    if page ~= nil then
         local detected = self:DetectNativeViewAll()
         if detected ~= nil then self.nativeViewAll = detected end
     end
